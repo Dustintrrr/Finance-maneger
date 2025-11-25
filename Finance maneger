@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多币种财务管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f3f4f6; font-family: 'Segoe UI', Roboto, sans-serif; }
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body>
+    <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6">
+        
+        <!-- 头部：标题 + 汇率 + 语言 & 展示货币 + Tab -->
+        <header class="flex justify-between items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    <i class="fa-solid fa-wallet mr-2"></i>{{ t('appTitle') }}
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    <span v-if="usdToDisplay">
+                        {{ t('todayRate') }}: 1 USD ≈ {{ usdToDisplay.toFixed(2) }} {{ displayCurrency }}
+                    </span>
+                    <span v-else>{{ t('fetchingRate') }}</span>
+                </p>
+            </div>
+
+            <div class="flex flex-col items-end gap-2">
+                <!-- Tab 切换 -->
+                <div class="flex bg-white rounded-lg p-1 shadow-sm">
+                    <button
+                        @click="currentTab = 'subs'"
+                        :class="{
+                            'bg-indigo-600 text-white': currentTab === 'subs',
+                            'text-gray-600': currentTab !== 'subs'
+                        }"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition"
+                    >
+                        {{ t('tabSubs') }}
+                    </button>
+                    <button
+                        @click="currentTab = 'debt'"
+                        :class="{
+                            'bg-red-600 text-white': currentTab === 'debt',
+                            'text-gray-600': currentTab !== 'debt'
+                        }"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition"
+                    >
+                        {{ t('tabDebt') }}
+                    </button>
+                </div>
+
+                <!-- 语言 & 展示货币 -->
+                <div class="flex gap-2">
+                    <div class="bg-white rounded-lg shadow-sm px-2 py-1 flex items-center">
+                        <span class="text-xs text-gray-500 mr-1">{{ t('languageLabel') }}:</span>
+                        <select v-model="language" class="text-xs bg-transparent focus:outline-none">
+                            <option value="zh">中文</option>
+                            <option value="en">English</option>
+                            <option value="ko">한국어</option>
+                            <option value="es">Español</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm px-2 py-1 flex items-center">
+                        <span class="text-xs text-gray-500 mr-1">{{ t('displayCurrency') }}:</span>
+                        <select v-model="displayCurrency" class="text-xs bg-transparent focus:outline-none">
+                            <option value="CNY">CNY</option>
+                            <option value="USD">USD</option>
+                            <option value="KRW">KRW</option>
+                            <option value="EUR">EUR</option>
+                            <option value="JPY">JPY</option>
+                            <option value="HKD">HKD</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 顶部统计卡片 -->
+        <!-- 订阅/固定支出：3 张卡片 -->
+        <section v-if="currentTab === 'subs'" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('dailyAvg') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('day'), 2) }}
+                </p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('monthlyFixed') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('month'), 2) }}
+                </p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('annualTotal') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('year'), 0) }}
+                </p>
+            </div>
+        </section>
+
+        <!-- 债务：新增“债务总额”卡片 -->
+        <section v-else class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('debtTotal') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateDebtPrincipalTotal(), 0) }}
+                </p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('dailyAvg') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('day'), 2) }}
+                </p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('monthlyFixed') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('month'), 2) }}
+                </p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-red-500 card">
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                    {{ t('annualTotal') }} ({{ displayCurrency }})
+                </p>
+                <p class="text-3xl font-bold mt-2 text-gray-800">
+                    {{ currencySymbol }} {{ formatMoney(calculateTotal('year'), 0) }}
+                </p>
+            </div>
+        </section>
+
+        <!-- 添加项目区域 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+            <h3 class="text-lg font-semibold mb-4 text-gray-700">
+                <i class="fa-solid fa-plus-circle mr-2"></i>
+                {{ currentTab === 'subs' ? t('addSubsTitle') : t('addDebtTitle') }}
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+                <!-- 名称 -->
+                <input
+                    v-model="newItem.name"
+                    :placeholder="t('namePlaceholder')"
+                    class="border rounded px-3 py-2 text-sm focus:ring-2 focus:outline-none md:col-span-2"
+                    :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'"
+                >
+
+                <!-- 金额（每月/每年 或 每期还款） -->
+                <div class="relative">
+                    <span class="absolute left-3 top-2 text-gray-400 text-sm">$</span>
+                    <input
+                        v-model.number="newItem.amount"
+                        type="number"
+                        :placeholder="currentTab === 'subs' ? t('amountPlaceholderSubs') : t('amountPlaceholderDebt')"
+                        class="border rounded pl-6 pr-3 py-2 text-sm w-full focus:ring-2 focus:outline-none"
+                        :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'"
+                    >
+                </div>
+
+                <!-- 债务总额（仅在债务页显示，可选） -->
+                <div class="relative" v-if="currentTab === 'debt'">
+                    <span class="absolute left-3 top-2 text-gray-400 text-sm">$</span>
+                    <input
+                        v-model.number="newItem.totalDebt"
+                        type="number"
+                        :placeholder="t('totalDebtPlaceholder')"
+                        class="border rounded pl-6 pr-3 py-2 text-sm w-full focus:ring-2 focus:outline-none"
+                        :class="'focus:ring-red-200'"
+                    >
+                </div>
+
+                <!-- 币种 -->
+                <select v-model="newItem.currency" class="border rounded px-2 py-2 text-sm bg-white">
+                    <option value="CNY">CNY (人民币)</option>
+                    <option value="USD">USD (US Dollar)</option>
+                    <option value="KRW">KRW (₩ 한국 원)</option>
+                    <option value="EUR">EUR (Euro)</option>
+                    <option value="JPY">JPY (日元)</option>
+                    <option value="HKD">HKD (港币)</option>
+                    <option value="GBP">GBP (Pound)</option>
+                </select>
+
+                <!-- 周期 -->
+                <select v-model="newItem.period" class="border rounded px-2 py-2 text-sm bg-white">
+                    <option value="month">{{ t('month') }}</option>
+                    <option value="year">{{ t('year') }}</option>
+                </select>
+            </div>
+
+            <button
+                @click="addItem"
+                class="mt-4 w-full text-white font-bold py-2 px-4 rounded transition duration-200"
+                :class="currentTab === 'subs' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700'"
+            >
+                {{ t('addButton') }}
+            </button>
+        </div>
+
+        <!-- 列表区域 -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-semibold text-gray-700">{{ t('detailList') }}</h3>
+                <span class="text-xs text-gray-500">{{ t('autoConvertNote') }}</span>
+            </div>
+            
+            <div v-if="currentList.length === 0" class="p-8 text-center text-gray-400">
+                {{ currentTab === 'subs' ? t('noDataSubs') : t('noDataDebt') }}
+            </div>
+
+            <ul v-else class="divide-y divide-gray-100">
+                <li
+                    v-for="(item, index) in currentList"
+                    :key="index"
+                    class="p-4 hover:bg-gray-50 flex justify-between items-center group"
+                >
+                    <div class="flex items-center">
+                        <div
+                            class="w-10 h-10 rounded-full flex items-center justify-center mr-4"
+                            :class="currentTab === 'subs' ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'"
+                        >
+                            <i class="fa-solid" :class="item.period === 'year' ? 'fa-calendar' : 'fa-calendar-day'"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-800">{{ item.name }}</p>
+                            <p class="text-xs text-gray-500">
+                                {{ t('originalPrice') }}:
+                                {{ item.currency }} {{ item.amount }}
+                                / {{ item.period === 'year' ? t('yearShort') : t('monthShort') }}
+                            </p>
+                            <!-- 债务条目显示总额（如有） -->
+                            <p
+                                v-if="currentTab === 'debt' && item.totalDebt"
+                                class="text-xs text-gray-500 mt-1"
+                            >
+                                {{ t('debtTotal') }}:
+                                {{ item.currency }} {{ item.totalDebt }}
+                                (≈ {{ currencySymbol }} {{ formatMoney(convertDebtTotal(item), 0) }})
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="text-right flex items-center gap-4">
+                        <div>
+                            <p class="font-bold text-gray-700">
+                                {{ currencySymbol }} {{ formatMoney(convertToMonthly(item), 1) }}
+                            </p>
+                            <p class="text-xs text-gray-400">{{ t('perMonth') }}</p>
+                        </div>
+                        <button
+                            @click="deleteItem(index)"
+                            class="text-gray-300 hover:text-red-500 transition p-2"
+                        >
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="mt-8 text-center text-xs text-gray-400 space-y-1">
+            <p>{{ t('localNote') }}</p>
+            <p>{{ t('rateSource') }}</p>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('subs'); // subs or debt
+                const language = ref('zh');     // zh / en / ko / es
+                const displayCurrency = ref('CNY'); // 展示货币
+                const rates = ref({});
+
+                const subscriptions = ref([]);
+                const debts = ref([]);
+
+                const newItem = ref({
+                    name: '',
+                    amount: '',
+                    totalDebt: '',
+                    currency: 'USD',
+                    period: 'month'
+                });
+
+                // 多语言文案
+                const messages = {
+                    zh: {
+                        appTitle: '财务管理中心',
+                        todayRate: '今日汇率',
+                        fetchingRate: '正在获取实时汇率...',
+                        tabSubs: '订阅/固定支出',
+                        tabDebt: '债务/负面页',
+                        dailyAvg: '每日均摊',
+                        monthlyFixed: '每月固定',
+                        annualTotal: '年度总成本',
+                        debtTotal: '债务总额',
+                        addSubsTitle: '添加订阅项目',
+                        addDebtTitle: '添加债务',
+                        namePlaceholder: '项目名称 (如: ChatGPT)',
+                        amountPlaceholderSubs: '金额',
+                        amountPlaceholderDebt: '每期还款金额',
+                        totalDebtPlaceholder: '债务总额 (可选)',
+                        currencyLabel: '币种',
+                        periodLabel: '周期',
+                        month: '每月付',
+                        year: '每年付',
+                        addButton: '确认添加',
+                        detailList: '详细清单',
+                        autoConvertNote: '自动换算为展示货币',
+                        noDataSubs: '暂无数据，请添加您的第一笔订阅。',
+                        noDataDebt: '暂无数据，请添加您的第一笔债务。',
+                        originalPrice: '原价',
+                        perMonth: '/ 月',
+                        perYear: '/ 年',
+                        localNote: '数据存储在您的本地浏览器中，清除缓存可能会导致数据丢失。',
+                        rateSource: '汇率数据来源: ExchangeRate-API',
+                        displayCurrency: '展示货币',
+                        languageLabel: '语言',
+                        monthShort: '月',
+                        yearShort: '年',
+                        fillAll: '请填写完整信息'
+                    },
+                    en: {
+                        appTitle: 'Finance Control Center',
+                        todayRate: "Today's rate",
+                        fetchingRate: 'Fetching live rates...',
+                        tabSubs: 'Subscriptions / Fixed costs',
+                        tabDebt: 'Debts / Negative page',
+                        dailyAvg: 'Daily average',
+                        monthlyFixed: 'Monthly fixed',
+                        annualTotal: 'Yearly total',
+                        debtTotal: 'Total debt',
+                        addSubsTitle: 'Add subscription item',
+                        addDebtTitle: 'Add debt',
+                        namePlaceholder: 'Item name (e.g. ChatGPT)',
+                        amountPlaceholderSubs: 'Amount',
+                        amountPlaceholderDebt: 'Installment amount',
+                        totalDebtPlaceholder: 'Total debt (optional)',
+                        currencyLabel: 'Currency',
+                        periodLabel: 'Period',
+                        month: 'Pay monthly',
+                        year: 'Pay yearly',
+                        addButton: 'Add',
+                        detailList: 'Detail list',
+                        autoConvertNote: 'Converted to display currency automatically',
+                        noDataSubs: 'No data yet. Add your first subscription.',
+                        noDataDebt: 'No data yet. Add your first debt.',
+                        originalPrice: 'Original',
+                        perMonth: '/ month',
+                        perYear: '/ year',
+                        localNote: 'Data is stored in your local browser. Clearing cache may erase it.',
+                        rateSource: 'Exchange rate source: ExchangeRate-API',
+                        displayCurrency: 'Display currency',
+                        languageLabel: 'Language',
+                        monthShort: 'month',
+                        yearShort: 'year',
+                        fillAll: 'Please fill in all required fields'
+                    },
+                    ko: {
+                        appTitle: '재무 관리 센터',
+                        todayRate: '오늘 환율',
+                        fetchingRate: '실시간 환율 불러오는 중...',
+                        tabSubs: '구독 / 고정지출',
+                        tabDebt: '부채 / 마이너스',
+                        dailyAvg: '일 평균',
+                        monthlyFixed: '월 고정',
+                        annualTotal: '연간 총액',
+                        debtTotal: '부채 총액',
+                        addSubsTitle: '구독 항목 추가',
+                        addDebtTitle: '부채 추가',
+                        namePlaceholder: '항목 이름 (예: ChatGPT)',
+                        amountPlaceholderSubs: '금액',
+                        amountPlaceholderDebt: '매 회 상환 금액',
+                        totalDebtPlaceholder: '부채 총액 (선택 사항)',
+                        currencyLabel: '통화',
+                        periodLabel: '주기',
+                        month: '매월 결제',
+                        year: '매년 결제',
+                        addButton: '추가',
+                        detailList: '상세 목록',
+                        autoConvertNote: '표시 통화로 자동 환산',
+                        noDataSubs: '아직 데이터가 없습니다. 첫 구독을 추가하세요.',
+                        noDataDebt: '아직 데이터가 없습니다. 첫 부채를 추가하세요.',
+                        originalPrice: '원가',
+                        perMonth: '/ 월',
+                        perYear: '/ 년',
+                        localNote: '데이터는 이 브라우저에만 저장됩니다. 캐시를 지우면 삭제될 수 있습니다.',
+                        rateSource: '환율 데이터: ExchangeRate-API',
+                        displayCurrency: '표시 통화',
+                        languageLabel: '언어',
+                        monthShort: '개월',
+                        yearShort: '년',
+                        fillAll: '필수 항목을 모두 입력해주세요.'
+                    },
+                    es: {
+                        appTitle: 'Centro de gestión financiera',
+                        todayRate: 'Tipo de cambio de hoy',
+                        fetchingRate: 'Cargando tipos de cambio...',
+                        tabSubs: 'Suscripciones / Gastos fijos',
+                        tabDebt: 'Deudas / Página negativa',
+                        dailyAvg: 'Promedio diario',
+                        monthlyFixed: 'Fijo mensual',
+                        annualTotal: 'Total anual',
+                        debtTotal: 'Deuda total',
+                        addSubsTitle: 'Añadir suscripción',
+                        addDebtTitle: 'Añadir deuda',
+                        namePlaceholder: 'Nombre del ítem (ej.: ChatGPT)',
+                        amountPlaceholderSubs: 'Importe',
+                        amountPlaceholderDebt: 'Cuota de pago',
+                        totalDebtPlaceholder: 'Deuda total (opcional)',
+                        currencyLabel: 'Moneda',
+                        periodLabel: 'Período',
+                        month: 'Pago mensual',
+                        year: 'Pago anual',
+                        addButton: 'Añadir',
+                        detailList: 'Lista detallada',
+                        autoConvertNote: 'Convertido automáticamente a la moneda de visualización',
+                        noDataSubs: 'No hay datos. Añade tu primera suscripción.',
+                        noDataDebt: 'No hay datos. Añade tu primera deuda.',
+                        originalPrice: 'Original',
+                        perMonth: '/ mes',
+                        perYear: '/ año',
+                        localNote: 'Los datos se guardan en tu navegador. Borrar la caché puede eliminarlos.',
+                        rateSource: 'Fuente de tipos de cambio: ExchangeRate-API',
+                        displayCurrency: 'Moneda de visualización',
+                        languageLabel: 'Idioma',
+                        monthShort: 'mes',
+                        yearShort: 'año',
+                        fillAll: 'Rellena todos los campos requeridos, por favor.'
+                    }
+                };
+
+                const t = (key) => {
+                    const pack = messages[language.value] || messages.zh;
+                    return pack[key] || key;
+                };
+
+                const currencySymbols = {
+                    CNY: '¥',
+                    USD: '$',
+                    EUR: '€',
+                    JPY: '¥',
+                    KRW: '₩',
+                    HKD: '$',
+                    GBP: '£'
+                };
+
+                const currencySymbol = computed(() => currencySymbols[displayCurrency.value] || '');
+
+                // 获取汇率：以 CNY 为基准，然后构造「1 单位外币 = ? CNY」
+                const fetchRates = async () => {
+                    try {
+                        const res = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
+                        const data = await res.json();
+
+                        const cnyBasedRates = {};
+                        for (const [key, value] of Object.entries(data.rates)) {
+                            // data.rates[key] = 1 CNY = value [key]
+                            // 所以 1 [key] = 1 / value CNY
+                            cnyBasedRates[key] = 1 / value;
+                        }
+                        cnyBasedRates['CNY'] = 1;
+                        rates.value = cnyBasedRates;
+                    } catch (e) {
+                        console.error("汇率获取失败，使用默认值", e);
+                        // 默认：1 单位 = ? CNY
+                        rates.value = {
+                            USD: 7.2,
+                            CNY: 1,
+                            EUR: 7.8,
+                            JPY: 0.048,
+                            HKD: 0.92,
+                            GBP: 9.1,
+                            KRW: 0.0053 // 大约 1 韩元 ≈ 0.0053 人民币
+                        };
+                    }
+                };
+
+                // 通用换算函数：从 from 货币 转成 to 货币
+                const convertCurrency = (amount, from, to) => {
+                    if (!amount || !rates.value[from] || !rates.value[to]) return 0;
+                    const inCNY = amount * rates.value[from]; // 先转成 CNY
+                    return inCNY / rates.value[to];           // 再从 CNY 转成目标货币
+                };
+
+                // 将条目转为“展示货币下的月度成本”
+                const convertToMonthly = (item) => {
+                    if (!item.amount || !rates.value[item.currency]) return 0;
+                    const amountNum = Number(item.amount) || 0;
+                    let monthlyInItem = 0;
+
+                    if (item.period === 'month') {
+                        monthlyInItem = amountNum;
+                    } else if (item.period === 'year') {
+                        monthlyInItem = amountNum / 12;
+                    }
+
+                    return convertCurrency(monthlyInItem, item.currency, displayCurrency.value);
+                };
+
+                // 总额：以“展示货币”为单位
+                const calculateTotal = (scale) => {
+                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+                    let totalMonthly = 0;
+
+                    for (const item of list) {
+                        totalMonthly += convertToMonthly(item);
+                    }
+
+                    if (scale === 'month') return totalMonthly;
+                    if (scale === 'year') return totalMonthly * 12;
+                    if (scale === 'day') return totalMonthly / 30.44;
+                    return 0;
+                };
+
+                // 债务本金合计（展示货币）
+                const calculateDebtPrincipalTotal = () => {
+                    let total = 0;
+                    for (const item of debts.value) {
+                        if (!item.totalDebt || !rates.value[item.currency]) continue;
+                        const principal = Number(item.totalDebt) || 0;
+                        total += convertCurrency(principal, item.currency, displayCurrency.value);
+                    }
+                    return total;
+                };
+
+                // 单条债务本金换算（展示）
+                const convertDebtTotal = (item) => {
+                    if (!item.totalDebt || !rates.value[item.currency]) return 0;
+                    const principal = Number(item.totalDebt) || 0;
+                    return convertCurrency(principal, item.currency, displayCurrency.value);
+                };
+
+                // 顶部显示：1 USD 对当前展示货币
+                const usdToDisplay = computed(() => {
+                    if (!rates.value['USD'] || !rates.value[displayCurrency.value]) return null;
+                    return convertCurrency(1, 'USD', displayCurrency.value);
+                });
+
+                // 增加项目
+                const addItem = () => {
+                    if (!newItem.value.name || !newItem.value.amount) {
+                        alert(t('fillAll'));
+                        return;
+                    }
+                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+
+                    list.push({
+                        name: newItem.value.name,
+                        amount: newItem.value.amount,
+                        totalDebt: currentTab.value === 'debt' ? newItem.value.totalDebt : '',
+                        currency: newItem.value.currency,
+                        period: newItem.value.period
+                    });
+
+                    // 重置表单
+                    newItem.value.name = '';
+                    newItem.value.amount = '';
+                    if (currentTab.value === 'debt') {
+                        newItem.value.totalDebt = '';
+                    }
+                };
+
+                const deleteItem = (index) => {
+                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+                    list.splice(index, 1);
+                };
+
+                const currentList = computed(() => {
+                    return currentTab.value === 'subs' ? subscriptions.value : debts.value;
+                });
+
+                const formatMoney = (value, digits = 2) => {
+                    const num = Number(value) || 0;
+                    return num.toLocaleString(undefined, {
+                        minimumFractionDigits: digits,
+                        maximumFractionDigits: digits
+                    });
+                };
+
+                // 持久化
+                onMounted(() => {
+                    fetchRates();
+                    const savedSubs = localStorage.getItem('my_finance_subs');
+                    const savedDebts = localStorage.getItem('my_finance_debts');
+                    const savedLang = localStorage.getItem('my_finance_lang');
+                    const savedDisplayCurrency = localStorage.getItem('my_finance_display_currency');
+
+                    if (savedSubs) subscriptions.value = JSON.parse(savedSubs);
+                    if (savedDebts) debts.value = JSON.parse(savedDebts);
+                    if (savedLang) language.value = savedLang;
+                    if (savedDisplayCurrency) displayCurrency.value = savedDisplayCurrency;
+                });
+
+                watch(subscriptions, (newVal) => {
+                    localStorage.setItem('my_finance_subs', JSON.stringify(newVal));
+                }, { deep: true });
+
+                watch(debts, (newVal) => {
+                    localStorage.setItem('my_finance_debts', JSON.stringify(newVal));
+                }, { deep: true });
+
+                watch(language, (val) => {
+                    localStorage.setItem('my_finance_lang', val);
+                });
+
+                watch(displayCurrency, (val) => {
+                    localStorage.setItem('my_finance_display_currency', val);
+                });
+
+                return {
+                    currentTab,
+                    language,
+                    displayCurrency,
+                    rates,
+                    subscriptions,
+                    debts,
+                    newItem,
+                    currentList,
+                    addItem,
+                    deleteItem,
+                    calculateTotal,
+                    calculateDebtPrincipalTotal,
+                    convertToMonthly,
+                    convertDebtTotal,
+                    usdToDisplay,
+                    currencySymbol,
+                    t,
+                    formatMoney
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
