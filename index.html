@@ -148,6 +148,90 @@
             </div>
         </section>
 
+        <!-- 月收入 & 结余 / 压力比 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+            <h3 class="text-lg font-semibold mb-4 text-gray-700">
+                <i class="fa-solid fa-scale-balanced mr-2"></i>{{ t('incomeTitle') }}
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                <!-- 输入区 -->
+                <div class="md:col-span-1">
+                    <label class="block text-xs text-gray-500 mb-1">
+                        {{ t('incomeInputLabel') }}
+                    </label>
+                    <div class="flex gap-2">
+                        <input
+                            v-model.number="income.amount"
+                            type="number"
+                            :placeholder="t('incomePlaceholder')"
+                            class="border rounded px-3 py-2 text-sm flex-1 focus:ring-2 focus:outline-none focus:ring-emerald-200"
+                        >
+                        <select v-model="income.currency" class="border rounded px-2 py-2 text-sm bg-white">
+                            <option value="CNY">CNY</option>
+                            <option value="USD">USD</option>
+                            <option value="KRW">KRW</option>
+                            <option value="EUR">EUR</option>
+                            <option value="JPY">JPY</option>
+                            <option value="HKD">HKD</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">
+                        {{ t('incomeHint') }}
+                    </p>
+                </div>
+
+                <!-- 月收入 & 月总支出 -->
+                <div class="bg-slate-50 rounded-lg p-3 flex flex-col justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500">
+                            {{ t('incomeCardIncome') }} ({{ displayCurrency }})
+                        </p>
+                        <p class="text-lg font-semibold text-gray-800 mt-1">
+                            {{ currencySymbol }} {{ formatMoney(monthlyIncomeDisplay, 2) }}
+                        </p>
+                        <p
+                            v-if="income.amount"
+                            class="text-xs text-gray-400 mt-1"
+                        >
+                            ({{ income.currency }} {{ formatMoney(income.amount, 0) }})
+                        </p>
+                    </div>
+                    <div class="mt-3">
+                        <p class="text-xs text-gray-500">
+                            {{ t('incomeCardOutflow') }} ({{ displayCurrency }})
+                        </p>
+                        <p class="text-sm font-medium text-gray-800 mt-1">
+                            {{ currencySymbol }} {{ formatMoney(totalMonthlyAll, 2) }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 结余 & 压力比 -->
+                <div class="bg-slate-50 rounded-lg p-3 flex flex-col justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500">
+                            {{ t('incomeCardSurplus') }} ({{ displayCurrency }})
+                        </p>
+                        <p
+                            class="text-lg font-semibold mt-1"
+                            :class="surplusDisplay >= 0 ? 'text-emerald-600' : 'text-red-600'"
+                        >
+                            {{ currencySymbol }} {{ formatMoney(surplusDisplay, 2) }}
+                        </p>
+                    </div>
+                    <div class="mt-3">
+                        <p class="text-xs text-gray-500">
+                            {{ t('incomeCardRatio') }}
+                        </p>
+                        <p class="text-sm font-medium text-gray-800 mt-1">
+                            {{ stressRatioDisplay }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 添加项目区域 -->
         <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
             <h3 class="text-lg font-semibold mb-4 text-gray-700">
@@ -203,6 +287,17 @@
                     <option value="month">{{ t('month') }}</option>
                     <option value="year">{{ t('year') }}</option>
                 </select>
+
+                <!-- 分类 -->
+                <select v-model="newItem.category" class="border rounded px-2 py-2 text-sm bg-white">
+                    <option
+                        v-for="opt in categoryOptions"
+                        :key="opt.value"
+                        :value="opt.value"
+                    >
+                        {{ t('cat_' + opt.value) }}
+                    </option>
+                </select>
             </div>
 
             <button
@@ -220,6 +315,54 @@
                 <h3 class="font-semibold text-gray-700">{{ t('detailList') }}</h3>
                 <span class="text-xs text-gray-500">{{ t('autoConvertNote') }}</span>
             </div>
+
+            <!-- 搜索 & 排序 -->
+            <div
+                v-if="currentList.length > 0"
+                class="px-6 py-3 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+            >
+                <div class="flex items-center gap-2 w-full md:w-1/2">
+                    <i class="fa-solid fa-magnifying-glass text-gray-400 text-sm"></i>
+                    <input
+                        v-model="searchQuery"
+                        :placeholder="t('searchPlaceholder')"
+                        class="flex-1 border rounded px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">{{ t('sortLabel') }}:</span>
+                    <select
+                        v-model="sortKey"
+                        class="border rounded px-2 py-1.5 text-xs bg-white"
+                    >
+                        <option value="monthlyDesc">{{ t('sortMonthlyDesc') }}</option>
+                        <option value="nameAsc">{{ t('sortNameAsc') }}</option>
+                        <option value="nameDesc">{{ t('sortNameDesc') }}</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 分类汇总 -->
+            <div
+                v-if="currentList.length > 0 && Object.keys(categoryTotals).length"
+                class="px-6 py-3 border-b border-gray-100 bg-slate-50 text-xs text-gray-600 flex flex-wrap gap-3"
+            >
+                <span class="font-semibold text-gray-700">
+                    {{ t('categorySummary') }}:
+                </span>
+                <span
+                    v-for="(val, catKey) in categoryTotals"
+                    :key="catKey"
+                    class="inline-flex items-center gap-1"
+                >
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-white border border-gray-200">
+                        {{ t('cat_' + catKey) }}
+                    </span>
+                    <span>
+                        {{ currencySymbol }} {{ formatMoney(val, 1) }}/{{ t('perMonthShort') }}
+                    </span>
+                </span>
+            </div>
             
             <div v-if="currentList.length === 0" class="p-8 text-center text-gray-400">
                 {{ currentTab === 'subs' ? t('noDataSubs') : t('noDataDebt') }}
@@ -227,9 +370,12 @@
 
             <ul v-else class="divide-y divide-gray-100">
                 <li
-                    v-for="(item, index) in currentList"
-                    :key="index"
-                    class="p-4 hover:bg-gray-50 flex justify-between items-center group"
+                    v-for="item in displayList"
+                    :key="item.id || item.name + '_' + item.currency + '_' + item.period + '_' + item.amount"
+                    :class="[
+                        'p-4 hover:bg-gray-50 flex justify-between items-center group',
+                        item.enabled ? '' : 'opacity-60'
+                    ]"
                 >
                     <div class="flex items-center">
                         <div
@@ -239,7 +385,14 @@
                             <i class="fa-solid" :class="item.period === 'year' ? 'fa-calendar' : 'fa-calendar-day'"></i>
                         </div>
                         <div>
-                            <p class="font-medium text-gray-800">{{ item.name }}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="font-medium text-gray-800">{{ item.name }}</p>
+                                <span
+                                    class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700"
+                                >
+                                    {{ t('cat_' + (item.category || 'other')) }}
+                                </span>
+                            </div>
                             <p class="text-xs text-gray-500">
                                 {{ t('originalPrice') }}:
                                 {{ item.currency }} {{ item.amount }}
@@ -258,14 +411,24 @@
                     </div>
                     
                     <div class="text-right flex items-center gap-4">
-                        <div>
-                            <p class="font-bold text-gray-700">
-                                {{ currencySymbol }} {{ formatMoney(convertToMonthly(item), 1) }}
-                            </p>
-                            <p class="text-xs text-gray-400">{{ t('perMonth') }}</p>
+                        <div class="flex flex-col items-end gap-1">
+                            <div>
+                                <p class="font-bold text-gray-700">
+                                    {{ currencySymbol }} {{ formatMoney(convertToMonthly(item), 1) }}
+                                </p>
+                                <p class="text-xs text-gray-400">{{ t('perMonth') }}</p>
+                            </div>
+                            <label class="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    v-model="item.enabled"
+                                    class="h-3 w-3 rounded border-gray-300"
+                                >
+                                <span>{{ t('includeInCalc') }}</span>
+                            </label>
                         </div>
                         <button
-                            @click="deleteItem(index)"
+                            @click="deleteItem(item)"
                             class="text-gray-300 hover:text-red-500 transition p-2"
                         >
                             <i class="fa-solid fa-trash"></i>
@@ -273,6 +436,46 @@
                     </div>
                 </li>
             </ul>
+        </div>
+
+        <!-- 备份 / 导入 -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mt-8">
+            <h3 class="text-lg font-semibold mb-4 text-gray-700">
+                <i class="fa-solid fa-cloud-arrow-up mr-2"></i>{{ t('backupTitle') }}
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 导出 -->
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">{{ t('exportDesc') }}</p>
+                    <button
+                        @click="exportData"
+                        class="mb-2 px-3 py-1 text-xs font-semibold rounded bg-slate-800 text-white hover:bg-slate-900"
+                    >
+                        {{ t('exportButton') }}
+                    </button>
+                    <textarea
+                        v-model="exportText"
+                        class="w-full h-32 border rounded px-2 py-1 text-xs font-mono resize-y"
+                        readonly
+                    ></textarea>
+                </div>
+
+                <!-- 导入 -->
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">{{ t('importDesc') }}</p>
+                    <textarea
+                        v-model="importText"
+                        :placeholder="t('importPlaceholder')"
+                        class="w-full h-32 border rounded px-2 py-1 text-xs font-mono resize-y"
+                    ></textarea>
+                    <button
+                        @click="importData"
+                        class="mt-2 px-3 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                        {{ t('importButton') }}
+                    </button>
+                </div>
+            </div>
         </div>
         
         <div class="mt-8 text-center text-xs text-gray-400 space-y-1">
@@ -300,8 +503,34 @@
                     amount: '',
                     totalDebt: '',
                     currency: 'USD',
-                    period: 'month'
+                    period: 'month',
+                    category: 'essential'
                 });
+
+                // 分类选项
+                const categoryOptions = [
+                    { value: 'essential' },
+                    { value: 'housing' },
+                    { value: 'transport' },
+                    { value: 'entertainment' },
+                    { value: 'tools' },
+                    { value: 'education' },
+                    { value: 'other' }
+                ];
+
+                // 月收入
+                const income = ref({
+                    amount: '',
+                    currency: 'CNY'
+                });
+
+                // 搜索 & 排序
+                const searchQuery = ref('');
+                const sortKey = ref('monthlyDesc');
+
+                // 备份文本
+                const exportText = ref('');
+                const importText = ref('');
 
                 // 多语言文案
                 const messages = {
@@ -317,7 +546,7 @@
                         debtTotal: '债务总额',
                         addSubsTitle: '添加订阅项目',
                         addDebtTitle: '添加债务',
-                        namePlaceholder: '项目名称 (如: ChatGPT)',
+                        namePlaceholder: '项目名称',
                         amountPlaceholderSubs: '金额',
                         amountPlaceholderDebt: '每期还款金额',
                         totalDebtPlaceholder: '债务总额 (可选)',
@@ -339,7 +568,40 @@
                         languageLabel: '语言',
                         monthShort: '月',
                         yearShort: '年',
-                        fillAll: '请填写完整信息'
+                        fillAll: '请填写完整信息',
+                        backupTitle: '数据备份 / 迁移',
+                        exportDesc: '点击生成一段文本，复制保存，换设备时粘贴导入即可。',
+                        exportButton: '生成备份',
+                        importDesc: '在此粘贴之前导出的文本，然后点击“导入数据”。',
+                        importPlaceholder: '在此粘贴备份 JSON 文本……',
+                        importButton: '导入数据',
+                        importSuccess: '导入成功！当前页面数据已被备份数据覆盖。',
+                        importError: '导入失败：JSON 格式不正确或缺少关键字段。',
+                        incomeTitle: '月收入 & 结余',
+                        incomeInputLabel: '月收入（税后）',
+                        incomePlaceholder: '请输入你的月收入',
+                        incomeHint: '建议填写税后稳定收入，用于估算结余与压力。',
+                        incomeCardIncome: '月收入',
+                        incomeCardOutflow: '月总支出',
+                        incomeCardSurplus: '月结余',
+                        incomeCardRatio: '支出 / 收入比',
+                        // 新增：分类 & 搜索 & 排序
+                        categoryLabel: '分类',
+                        categorySummary: '按分类汇总',
+                        perMonthShort: '月',
+                        includeInCalc: '参与计算',
+                        searchPlaceholder: '搜索项目名称...',
+                        sortLabel: '排序',
+                        sortMonthlyDesc: '按月费用从高到低',
+                        sortNameAsc: '按名称 A→Z',
+                        sortNameDesc: '按名称 Z→A',
+                        cat_essential: '刚需',
+                        cat_housing: '住房',
+                        cat_transport: '交通',
+                        cat_entertainment: '娱乐',
+                        cat_tools: '工具',
+                        cat_education: '教育',
+                        cat_other: '其他'
                     },
                     en: {
                         appTitle: 'Finance Control Center',
@@ -353,7 +615,7 @@
                         debtTotal: 'Total debt',
                         addSubsTitle: 'Add subscription item',
                         addDebtTitle: 'Add debt',
-                        namePlaceholder: 'Item name (e.g. ChatGPT)',
+                        namePlaceholder: 'Item name',
                         amountPlaceholderSubs: 'Amount',
                         amountPlaceholderDebt: 'Installment amount',
                         totalDebtPlaceholder: 'Total debt (optional)',
@@ -375,7 +637,39 @@
                         languageLabel: 'Language',
                         monthShort: 'month',
                         yearShort: 'year',
-                        fillAll: 'Please fill in all required fields'
+                        fillAll: 'Please fill in all required fields',
+                        backupTitle: 'Data backup / migration',
+                        exportDesc: 'Click to generate a text backup. Copy & save it, paste it on another device to restore.',
+                        exportButton: 'Generate backup',
+                        importDesc: 'Paste your previously exported text here, then click "Import data".',
+                        importPlaceholder: 'Paste backup JSON text here…',
+                        importButton: 'Import data',
+                        importSuccess: 'Import succeeded! Current data has been replaced by backup.',
+                        importError: 'Import failed: invalid JSON or missing fields.',
+                        incomeTitle: 'Monthly income & balance',
+                        incomeInputLabel: 'Monthly income (after tax)',
+                        incomePlaceholder: 'Enter your monthly income',
+                        incomeHint: 'Use your stable after-tax income to estimate surplus & pressure.',
+                        incomeCardIncome: 'Monthly income',
+                        incomeCardOutflow: 'Total monthly spending',
+                        incomeCardSurplus: 'Monthly surplus',
+                        incomeCardRatio: 'Spending / income ratio',
+                        categoryLabel: 'Category',
+                        categorySummary: 'By category',
+                        perMonthShort: 'mo',
+                        includeInCalc: 'Include in totals',
+                        searchPlaceholder: 'Search by name...',
+                        sortLabel: 'Sort',
+                        sortMonthlyDesc: 'By monthly cost (high → low)',
+                        sortNameAsc: 'By name A → Z',
+                        sortNameDesc: 'By name Z → A',
+                        cat_essential: 'Essential',
+                        cat_housing: 'Housing',
+                        cat_transport: 'Transport',
+                        cat_entertainment: 'Entertainment',
+                        cat_tools: 'Tools',
+                        cat_education: 'Education',
+                        cat_other: 'Other'
                     },
                     ko: {
                         appTitle: '재무 관리 센터',
@@ -389,7 +683,7 @@
                         debtTotal: '부채 총액',
                         addSubsTitle: '구독 항목 추가',
                         addDebtTitle: '부채 추가',
-                        namePlaceholder: '항목 이름 (예: ChatGPT)',
+                        namePlaceholder: '항목 이름',
                         amountPlaceholderSubs: '금액',
                         amountPlaceholderDebt: '매 회 상환 금액',
                         totalDebtPlaceholder: '부채 총액 (선택 사항)',
@@ -411,7 +705,39 @@
                         languageLabel: '언어',
                         monthShort: '개월',
                         yearShort: '년',
-                        fillAll: '필수 항목을 모두 입력해주세요.'
+                        fillAll: '필수 항목을 모두 입력해주세요.',
+                        backupTitle: '데이터 백업 / 이전',
+                        exportDesc: '버튼을 눌러 백업 텍스트를 생성하고 저장한 뒤, 다른 기기에서 붙여넣어 복원할 수 있습니다.',
+                        exportButton: '백업 생성',
+                        importDesc: '이전에 내보낸 텍스트를 여기에 붙여넣고 "데이터 가져오기"를 클릭하세요.',
+                        importPlaceholder: '백업 JSON 텍스트를 여기에 붙여넣기…',
+                        importButton: '데이터 가져오기',
+                        importSuccess: '가져오기 완료! 현재 데이터가 백업 데이터로 교체되었습니다.',
+                        importError: '가져오기 실패: JSON 형식이 잘못되었거나 필드가 부족합니다.',
+                        incomeTitle: '월 소득 & 잉여',
+                        incomeInputLabel: '월 소득 (세후)',
+                        incomePlaceholder: '월 소득을 입력하세요',
+                        incomeHint: '세후 기준의 안정적인 소득을 입력하면 잉여와 부담 비율을 볼 수 있습니다.',
+                        incomeCardIncome: '월 소득',
+                        incomeCardOutflow: '월 총지출',
+                        incomeCardSurplus: '월 잉여',
+                        incomeCardRatio: '지출 / 소득 비율',
+                        categoryLabel: '분류',
+                        categorySummary: '분류별 합계',
+                        perMonthShort: '월',
+                        includeInCalc: '계산에 포함',
+                        searchPlaceholder: '이름으로 검색...',
+                        sortLabel: '정렬',
+                        sortMonthlyDesc: '월 비용 높은 순',
+                        sortNameAsc: '이름 A → Z',
+                        sortNameDesc: '이름 Z → A',
+                        cat_essential: '필수',
+                        cat_housing: '주거',
+                        cat_transport: '교통',
+                        cat_entertainment: '엔터테인먼트',
+                        cat_tools: '도구',
+                        cat_education: '교육',
+                        cat_other: '기타'
                     },
                     es: {
                         appTitle: 'Centro de gestión financiera',
@@ -425,7 +751,7 @@
                         debtTotal: 'Deuda total',
                         addSubsTitle: 'Añadir suscripción',
                         addDebtTitle: 'Añadir deuda',
-                        namePlaceholder: 'Nombre del ítem (ej.: ChatGPT)',
+                        namePlaceholder: 'Nombre del ítem',
                         amountPlaceholderSubs: 'Importe',
                         amountPlaceholderDebt: 'Cuota de pago',
                         totalDebtPlaceholder: 'Deuda total (opcional)',
@@ -447,7 +773,39 @@
                         languageLabel: 'Idioma',
                         monthShort: 'mes',
                         yearShort: 'año',
-                        fillAll: 'Rellena todos los campos requeridos, por favor.'
+                        fillAll: 'Rellena todos los campos requeridos, por favor.',
+                        backupTitle: 'Copia de seguridad / migración de datos',
+                        exportDesc: 'Haz clic para generar un texto de copia de seguridad. Guárdalo y pégalo en otro dispositivo para restaurar.',
+                        exportButton: 'Generar copia',
+                        importDesc: 'Pega aquí el texto exportado anteriormente y haz clic en "Importar datos".',
+                        importPlaceholder: 'Pega aquí el texto JSON de la copia…',
+                        importButton: 'Importar datos',
+                        importSuccess: '¡Importación completada! Los datos actuales han sido reemplazados por la copia.',
+                        importError: 'Error al importar: JSON no válido o campos faltantes.',
+                        incomeTitle: 'Ingreso mensual y saldo',
+                        incomeInputLabel: 'Ingreso mensual (neto)',
+                        incomePlaceholder: 'Introduce tu ingreso mensual',
+                        incomeHint: 'Usa tu ingreso neto y estable para estimar el saldo y la presión.',
+                        incomeCardIncome: 'Ingreso mensual',
+                        incomeCardOutflow: 'Gasto mensual total',
+                        incomeCardSurplus: 'Superávit mensual',
+                        incomeCardRatio: 'Relación gasto / ingreso',
+                        categoryLabel: 'Categoría',
+                        categorySummary: 'Por categoría',
+                        perMonthShort: 'mes',
+                        includeInCalc: 'Incluir en totales',
+                        searchPlaceholder: 'Buscar por nombre...',
+                        sortLabel: 'Ordenar',
+                        sortMonthlyDesc: 'Por coste mensual (alto → bajo)',
+                        sortNameAsc: 'Por nombre A → Z',
+                        sortNameDesc: 'Por nombre Z → A',
+                        cat_essential: 'Esencial',
+                        cat_housing: 'Vivienda',
+                        cat_transport: 'Transporte',
+                        cat_entertainment: 'Entretenimiento',
+                        cat_tools: 'Herramientas',
+                        cat_education: 'Educación',
+                        cat_other: 'Otros'
                     }
                 };
 
@@ -468,7 +826,17 @@
 
                 const currencySymbol = computed(() => currencySymbols[displayCurrency.value] || '');
 
-                // 获取汇率：以 CNY 为基准，然后构造「1 单位外币 = ? CNY」
+                // 归一化：为旧数据补上 enabled / category
+                const normalizeList = (list) => {
+                    if (!Array.isArray(list)) return [];
+                    return list.map(item => ({
+                        enabled: true,
+                        category: 'other',
+                        ...item
+                    }));
+                };
+
+                // 汇率：以 CNY 为基准，然后构造「1 单位外币 = ? CNY」
                 const fetchRates = async () => {
                     try {
                         const res = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
@@ -504,8 +872,9 @@
                     return inCNY / rates.value[to];           // 再从 CNY 转成目标货币
                 };
 
-                // 将条目转为“展示货币下的月度成本”
+                // 将条目转为“展示货币下的月度成本”，只计算 enabled
                 const convertToMonthly = (item) => {
+                    if (!item.enabled) return 0;
                     if (!item.amount || !rates.value[item.currency]) return 0;
                     const amountNum = Number(item.amount) || 0;
                     let monthlyInItem = 0;
@@ -519,7 +888,20 @@
                     return convertCurrency(monthlyInItem, item.currency, displayCurrency.value);
                 };
 
-                // 总额：以“展示货币”为单位
+                // 按列表计算月总支出
+                const totalMonthlySubs = computed(() => {
+                    return subscriptions.value.reduce((sum, item) => sum + convertToMonthly(item), 0);
+                });
+
+                const totalMonthlyDebts = computed(() => {
+                    return debts.value.reduce((sum, item) => sum + convertToMonthly(item), 0);
+                });
+
+                const totalMonthlyAll = computed(() => {
+                    return totalMonthlySubs.value + totalMonthlyDebts.value;
+                });
+
+                // 总额：以“展示货币”为单位（当前 Tab）
                 const calculateTotal = (scale) => {
                     const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
                     let totalMonthly = 0;
@@ -534,10 +916,11 @@
                     return 0;
                 };
 
-                // 债务本金合计（展示货币）
+                // 债务本金合计（展示货币，只计算 enabled）
                 const calculateDebtPrincipalTotal = () => {
                     let total = 0;
                     for (const item of debts.value) {
+                        if (!item.enabled) continue;
                         if (!item.totalDebt || !rates.value[item.currency]) continue;
                         const principal = Number(item.totalDebt) || 0;
                         total += convertCurrency(principal, item.currency, displayCurrency.value);
@@ -547,6 +930,7 @@
 
                 // 单条债务本金换算（展示）
                 const convertDebtTotal = (item) => {
+                    if (!item.enabled) return 0;
                     if (!item.totalDebt || !rates.value[item.currency]) return 0;
                     const principal = Number(item.totalDebt) || 0;
                     return convertCurrency(principal, item.currency, displayCurrency.value);
@@ -558,6 +942,64 @@
                     return convertCurrency(1, 'USD', displayCurrency.value);
                 });
 
+                // 月收入（展示货币）
+                const monthlyIncomeDisplay = computed(() => {
+                    if (!income.value.amount || !rates.value[income.value.currency]) return 0;
+                    const amt = Number(income.value.amount) || 0;
+                    return convertCurrency(amt, income.value.currency, displayCurrency.value);
+                });
+
+                // 月结余 & 压力比
+                const surplusDisplay = computed(() => {
+                    return monthlyIncomeDisplay.value - totalMonthlyAll.value;
+                });
+
+                const stressRatioDisplay = computed(() => {
+                    if (!income.value.amount || monthlyIncomeDisplay.value <= 0) return '--';
+                    const ratio = (totalMonthlyAll.value / monthlyIncomeDisplay.value) * 100;
+                    return ratio.toFixed(1) + '%';
+                });
+
+                // 当前列表（原始数据）
+                const currentList = computed(() => {
+                    return currentTab.value === 'subs' ? subscriptions.value : debts.value;
+                });
+
+                // 分类汇总（当前 Tab，按月度成本）
+                const categoryTotals = computed(() => {
+                    const list = currentList.value;
+                    const totals = {};
+                    for (const item of list) {
+                        const monthly = convertToMonthly(item);
+                        if (!monthly) continue;
+                        const cat = item.category || 'other';
+                        totals[cat] = (totals[cat] || 0) + monthly;
+                    }
+                    return totals;
+                });
+
+                // 显示列表：带搜索 & 排序
+                const displayList = computed(() => {
+                    let list = currentList.value.slice();
+                    const q = searchQuery.value.trim().toLowerCase();
+                    if (q) {
+                        list = list.filter(item =>
+                            (item.name || '').toString().toLowerCase().includes(q)
+                        );
+                    }
+                    list.sort((a, b) => {
+                        if (sortKey.value === 'monthlyDesc') {
+                            return convertToMonthly(b) - convertToMonthly(a);
+                        } else if (sortKey.value === 'nameAsc') {
+                            return (a.name || '').toString().localeCompare((b.name || '').toString());
+                        } else if (sortKey.value === 'nameDesc') {
+                            return (b.name || '').toString().localeCompare((a.name || '').toString());
+                        }
+                        return 0;
+                    });
+                    return list;
+                });
+
                 // 增加项目
                 const addItem = () => {
                     if (!newItem.value.name || !newItem.value.amount) {
@@ -567,14 +1009,17 @@
                     const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
 
                     list.push({
+                        id: Date.now() + '-' + Math.random().toString(16).slice(2),
                         name: newItem.value.name,
                         amount: newItem.value.amount,
                         totalDebt: currentTab.value === 'debt' ? newItem.value.totalDebt : '',
                         currency: newItem.value.currency,
-                        period: newItem.value.period
+                        period: newItem.value.period,
+                        category: newItem.value.category || 'other',
+                        enabled: true
                     });
 
-                    // 重置表单
+                    // 重置表单（保留币种 & 分类方便连续输入）
                     newItem.value.name = '';
                     newItem.value.amount = '';
                     if (currentTab.value === 'debt') {
@@ -582,14 +1027,13 @@
                     }
                 };
 
-                const deleteItem = (index) => {
+                const deleteItem = (itemToRemove) => {
                     const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                    list.splice(index, 1);
+                    const idx = list.indexOf(itemToRemove);
+                    if (idx !== -1) {
+                        list.splice(idx, 1);
+                    }
                 };
-
-                const currentList = computed(() => {
-                    return currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                });
 
                 const formatMoney = (value, digits = 2) => {
                     const num = Number(value) || 0;
@@ -599,6 +1043,55 @@
                     });
                 };
 
+                // 导出数据
+                const exportData = () => {
+                    const payload = {
+                        version: 3,
+                        language: language.value,
+                        displayCurrency: displayCurrency.value,
+                        subscriptions: subscriptions.value,
+                        debts: debts.value,
+                        income: income.value
+                    };
+                    exportText.value = JSON.stringify(payload, null, 2);
+                };
+
+                // 导入数据
+                const importData = () => {
+                    if (!importText.value) {
+                        alert(t('fillAll'));
+                        return;
+                    }
+                    try {
+                        const data = JSON.parse(importText.value);
+                        if (!data || typeof data !== 'object') {
+                            throw new Error('invalid payload');
+                        }
+                        if (Array.isArray(data.subscriptions)) {
+                            subscriptions.value = normalizeList(data.subscriptions);
+                        }
+                        if (Array.isArray(data.debts)) {
+                            debts.value = normalizeList(data.debts);
+                        }
+                        if (data.language) {
+                            language.value = data.language;
+                        }
+                        if (data.displayCurrency) {
+                            displayCurrency.value = data.displayCurrency;
+                        }
+                        if (data.income && typeof data.income === 'object') {
+                            income.value = {
+                                amount: data.income.amount || '',
+                                currency: data.income.currency || 'CNY'
+                            };
+                        }
+                        alert(t('importSuccess'));
+                    } catch (e) {
+                        console.error('Import error', e);
+                        alert(t('importError'));
+                    }
+                };
+
                 // 持久化
                 onMounted(() => {
                     fetchRates();
@@ -606,11 +1099,33 @@
                     const savedDebts = localStorage.getItem('my_finance_debts');
                     const savedLang = localStorage.getItem('my_finance_lang');
                     const savedDisplayCurrency = localStorage.getItem('my_finance_display_currency');
+                    const savedIncome = localStorage.getItem('my_finance_income');
 
-                    if (savedSubs) subscriptions.value = JSON.parse(savedSubs);
-                    if (savedDebts) debts.value = JSON.parse(savedDebts);
+                    if (savedSubs) {
+                        try {
+                            subscriptions.value = normalizeList(JSON.parse(savedSubs));
+                        } catch {
+                            subscriptions.value = [];
+                        }
+                    }
+                    if (savedDebts) {
+                        try {
+                            debts.value = normalizeList(JSON.parse(savedDebts));
+                        } catch {
+                            debts.value = [];
+                        }
+                    }
                     if (savedLang) language.value = savedLang;
                     if (savedDisplayCurrency) displayCurrency.value = savedDisplayCurrency;
+                    if (savedIncome) {
+                        try {
+                            const inc = JSON.parse(savedIncome);
+                            income.value = {
+                                amount: inc.amount || '',
+                                currency: inc.currency || 'CNY'
+                            };
+                        } catch {}
+                    }
                 });
 
                 watch(subscriptions, (newVal) => {
@@ -629,6 +1144,10 @@
                     localStorage.setItem('my_finance_display_currency', val);
                 });
 
+                watch(income, (val) => {
+                    localStorage.setItem('my_finance_income', JSON.stringify(val));
+                }, { deep: true });
+
                 return {
                     currentTab,
                     language,
@@ -637,7 +1156,10 @@
                     subscriptions,
                     debts,
                     newItem,
+                    income,
                     currentList,
+                    categoryTotals,
+                    displayList,
                     addItem,
                     deleteItem,
                     calculateTotal,
@@ -647,7 +1169,18 @@
                     usdToDisplay,
                     currencySymbol,
                     t,
-                    formatMoney
+                    formatMoney,
+                    exportText,
+                    importText,
+                    exportData,
+                    importData,
+                    totalMonthlyAll,
+                    monthlyIncomeDisplay,
+                    surplusDisplay,
+                    stressRatioDisplay,
+                    categoryOptions,
+                    searchQuery,
+                    sortKey
                 };
             }
         }).mount('#app');
