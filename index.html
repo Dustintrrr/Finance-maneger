@@ -1,1427 +1,1578 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>个人 Dashboard · 财务 & 学习时间</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f3f4f6; font-family: 'Segoe UI', Roboto, sans-serif; }
-        .card { transition: all 0.3s ease; }
-        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人 Dashboard · 财务 & 学习时间</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    body { background-color: #f3f4f6; font-family: 'Segoe UI', Roboto, sans-serif; }
+    .card { transition: all 0.3s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+  </style>
 </head>
 <body>
-    <div class="max-w-5xl mx-auto p-4 sm:p-6">
-        <!-- 顶部总导航：财务 / 学习 -->
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800 flex items-center">
-                    <span class="inline-block w-2 h-2 rounded-full bg-sky-400 mr-2 shadow"></span>
-                    Dustin 个人 Dashboard
-                </h1>
-                <p class="text-xs text-gray-500 mt-1">
-                    管理多币种财务，同时精确追踪雅思 / Python / 经济学等学习时间。
-                </p>
-            </div>
-            <div class="flex bg-white rounded-lg p-1 shadow-sm">
-                <button id="tabFinance"
-                        class="px-4 py-2 rounded-md text-sm font-medium transition bg-indigo-600 text-white">
-                    💰 财务管理
-                </button>
-                <button id="tabStudy"
-                        class="px-4 py-2 rounded-md text-sm font-medium transition text-gray-600">
-                    📚 学习计时器
-                </button>
-            </div>
-        </div>
-
-        <!-- 财务模块 -->
-        <section id="finance-section">
-            <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6">
-                
-                <header class="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-wallet mr-2"></i>财务管理中心</h1>
-                        <p class="text-sm text-gray-500 mt-1">
-                            <span v-if="rates.USD">今日汇率: 1 USD ≈ {{ rates.USD.toFixed(2) }} CNY</span>
-                            <span v-else>正在获取实时汇率...</span>
-                        </p>
-                    </div>
-                    <div class="flex bg-white rounded-lg p-1 shadow-sm">
-                        <button @click="currentTab = 'subs'" :class="{'bg-indigo-600 text-white': currentTab === 'subs', 'text-gray-600': currentTab !== 'subs'}" class="px-4 py-2 rounded-md text-sm font-medium transition">
-                            订阅/固定支出
-                        </button>
-                        <button @click="currentTab = 'debt'" :class="{'bg-red-600 text-white': currentTab === 'debt', 'text-gray-600': currentTab !== 'debt'}" class="px-4 py-2 rounded-md text-sm font-medium transition">
-                            债务/负面页
-                        </button>
-                    </div>
-                </header>
-
-                <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4" :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">每日均摊 (CNY)</p>
-                        <p class="text-3xl font-bold mt-2 text-gray-800">¥ {{ calculateTotal('day').toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4" :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">每月固定 (CNY)</p>
-                        <p class="text-3xl font-bold mt-2 text-gray-800">¥ {{ calculateTotal('month').toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-xl shadow-sm border-l-4" :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
-                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">年度总成本 (CNY)</p>
-                        <p class="text-3xl font-bold mt-2 text-gray-800">¥ {{ calculateTotal('year').toLocaleString('zh-CN', {minimumFractionDigits: 0, maximumFractionDigits: 0}) }}</p>
-                    </div>
-                </section>
-
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
-                    <h3 class="text-lg font-semibold mb-4 text-gray-700">
-                        <i class="fa-solid fa-plus-circle mr-2"></i>
-                        添加{{ currentTab === 'subs' ? '订阅项目' : '债务' }}
-                    </h3>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                        <input v-model="newItem.name" placeholder="项目名称 (如: ChatGPT)" class="border rounded px-3 py-2 text-sm focus:ring-2 focus:outline-none md:col-span-2" :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'">
-                        
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-400 text-sm">$</span>
-                            <input v-model.number="newItem.amount" type="number" placeholder="金额" class="border rounded pl-6 pr-3 py-2 text-sm w-full focus:ring-2 focus:outline-none" :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'">
-                        </div>
-
-                        <select v-model="newItem.currency" class="border rounded px-2 py-2 text-sm bg-white">
-                            <option value="CNY">CNY (人民币)</option>
-                            <option value="USD">USD (美元)</option>
-                            <option value="EUR">EUR (欧元)</option>
-                            <option value="JPY">JPY (日元)</option>
-                            <option value="HKD">HKD (港币)</option>
-                            <option value="GBP">GBP (英镑)</option>
-                        </select>
-
-                        <select v-model="newItem.period" class="border rounded px-2 py-2 text-sm bg-white">
-                            <option value="month">每月付</option>
-                            <option value="year">每年付</option>
-                        </select>
-                    </div>
-                    <button @click="addItem" class="mt-4 w-full text-white font-bold py-2 px-4 rounded transition duration-200" :class="currentTab === 'subs' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700'">
-                        确认添加
-                    </button>
-                </div>
-
-                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                        <h3 class="font-semibold text-gray-700">详细清单</h3>
-                        <span class="text-xs text-gray-500">自动换算为 CNY 展示</span>
-                    </div>
-                    
-                    <div v-if="currentList.length === 0" class="p-8 text-center text-gray-400">
-                        暂无数据，请添加您的第一笔{{ currentTab === 'subs' ? '订阅' : '债务' }}。
-                    </div>
-
-                    <ul v-else class="divide-y divide-gray-100">
-                        <li v-for="(item, index) in currentList" :key="index" class="p-4 hover:bg-gray-50 flex justify-between items-center group">
-                            <div class="flex items-center">
-                                <div class="w-10 h-10 rounded-full flex items-center justify-center mr-4" :class="currentTab === 'subs' ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'">
-                                    <i class="fa-solid" :class="item.period === 'year' ? 'fa-calendar' : 'fa-calendar-day'"></i>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-gray-800">{{ item.name }}</p>
-                                    <p class="text-xs text-gray-500">
-                                        原价: {{ item.currency }} {{ item.amount }} / {{ item.period === 'year' ? '年' : '月' }}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div class="text-right flex items-center gap-4">
-                                <div>
-                                    <p class="font-bold text-gray-700">¥ {{ convertToMonthly(item).toFixed(1) }}</p>
-                                    <p class="text-xs text-gray-400">/ 月</p>
-                                </div>
-                                <button @click="deleteItem(index)" class="text-gray-300 hover:text-red-500 transition p-2">
-                                    <i class="fa-solid fa-trash"></i>
-                                </button>
-                            </div>
-                        </li>
-                    </ul>
-                </div>
-                
-                <div class="mt-8 text-center text-xs text-gray-400">
-                    <p>数据存储在您的本地浏览器中，清除缓存可能会导致数据丢失。</p>
-                    <p>汇率数据来源: ExchangeRate-API</p>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- 学习计时模块（新版：支持自定义项目 + 中英韩切换） -->
-<section id="study-section" class="hidden">
-  <div class="space-y-6 max-w-4xl mx-auto">
-    <!-- 控制 + 今日进度 -->
-    <div class="bg-white rounded-xl shadow-sm p-6">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-        <div>
-          <h2 class="text-lg font-semibold text-gray-800 flex items-center">
-            <i class="fa-solid fa-stopwatch mr-2 text-sky-500"></i>
-            <span id="studyTitleText">学习时间记录器</span>
-          </h2>
-          <p id="studySubtitleText" class="text-xs text-gray-500 mt-1">
-            选择项目点击「开始」，结束时点击「结束当前」，系统会自动累计并统计趋势。
-          </p>
-        </div>
-        <div class="flex flex-col items-end gap-2">
-  <!-- 语言切换 -->
-  <div class="flex rounded-full border border-gray-200 bg-slate-50 text-[11px] overflow-hidden">
-    <button class="lang-switch px-2.5 py-1 border-r border-gray-200 text-gray-600" data-lang="zh">中</button>
-    <button class="lang-switch px-2.5 py-1 border-r border-gray-200 text-gray-600" data-lang="en">EN</button>
-    <button class="lang-switch px-2.5 py-1 text-gray-600" data-lang="ko">한</button>
-  </div>
-
-  <!-- 账号 + 云同步 -->
-  <div class="flex items-center gap-2">
-    <input id="accountIdInput"
-           class="border rounded-full px-3 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-sky-200"
-           placeholder="账号ID，例如 dustin-main">
-    <button id="syncButton"
-            class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-slate-900 text-sky-200 hover:bg-black transition">
-      ☁︎ 同步
-    </button>
-  </div>
-
-  <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-[11px] text-gray-500">
-    <span id="localHintText">数据保存在浏览器本地（本机）</span>
-  </span>
-</div>
-
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-        <div>
-          <label id="labelTask" class="block text-xs font-medium text-gray-500 mb-1">学习项目</label>
-          <select id="taskSelect"
-                  class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-200">
-          </select>
-        </div>
-        <div>
-          <label id="labelTimer" class="block text-xs font-medium text-gray-500 mb-1">实时计时</label>
-          <div class="flex flex-wrap items-center gap-3">
-            <button id="toggleButton"
-                    class="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-sky-500 text-white shadow-sm hover:bg-sky-600 transition">
-              ⏱️ 开始
-            </button>
-            <button id="stopButton"
-                    class="inline-flex items-center px-4 py-2 rounded-full text-sm border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 transition"
-                    disabled>
-              ⏹️ 结束当前
-            </button>
-            <span id="timerDisplay"
-                  class="font-mono text-lg px-3 py-1 rounded-full bg-slate-900 text-cyan-300 shadow-inner">
-              00:00:00
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <p id="statusText" class="mt-3 text-xs text-gray-500">
-        当前无进行中的学习
-      </p>
-
-      <div class="mt-4 border border-dashed border-gray-200 rounded-lg p-3">
-        <div class="flex items-center justify-between mb-2">
-          <span id="todayHeaderText" class="text-xs font-semibold text-gray-600">📅 今日进度（按项目）</span>
-          <span id="todayTotalBadge"
-                class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] bg-slate-100 text-gray-600">
-            今日总学习：0 分钟
-          </span>
-        </div>
-        <div id="todaySummaryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-          <!-- JS 填充 -->
-        </div>
-      </div>
-    </div>
-
-    <!-- 项目管理：自定义添加 / 删除 / 每日目标 -->
-    <div class="bg-white rounded-xl shadow-sm p-6">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h3 id="taskManageTitle" class="text-sm font-semibold text-gray-800">项目管理</h3>
-          <p id="taskManageSubtitle" class="text-xs text-gray-500 mt-1">
-            添加 / 删除自定义学习项目，并设置每日目标分钟数。
-          </p>
-        </div>
-      </div>
-
-      <div id="taskList" class="space-y-2 mb-4">
-        <!-- JS 填充 项目列表 -->
-      </div>
-
-      <div class="border-t border-gray-100 pt-3 mt-3">
-        <p id="taskNewTitle" class="text-xs font-semibold text-gray-600 mb-2">新增项目</p>
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <input id="newTaskNameZh" class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
-                 placeholder="名称（中文）">
-          <input id="newTaskNameEn" class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
-                 placeholder="Name (English)">
-          <input id="newTaskNameKo" class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
-                 placeholder="이름 (한국어)">
-          <input id="newTaskGoal" type="number" min="0"
-                 class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
-                 placeholder="每日目标分钟">
-        </div>
-        <button id="addTaskButton"
-                class="mt-3 inline-flex items-center px-4 py-2 rounded-full text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition">
-          ➕ 添加项目
-        </button>
-      </div>
-    </div>
-
-    <!-- 最近 7 天图表 -->
-    <div class="bg-white rounded-xl shadow-sm p-6">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h3 id="weeklyTitle" class="text-sm font-semibold text-gray-800">最近 7 天总学习时长</h3>
-          <p id="weeklySubtitle" class="text-xs text-gray-500 mt-1">按天统计所有项目总时长（单位：分钟）。</p>
-        </div>
-      </div>
-      <div class="h-48">
-        <canvas id="weeklyChart"></canvas>
-      </div>
-    </div>
-
-    <!-- 历史记录 -->
-    <div class="bg-white rounded-xl shadow-sm p-6">
-      <div class="flex items-center justify-between mb-3">
-        <div>
-          <h3 id="historyTitle" class="text-sm font-semibold text-gray-800">最近学习记录</h3>
-          <p id="historySubtitle" class="text-xs text-gray-500 mt-1">显示最近若干次学习的开始时间、结束时间和时长。</p>
-        </div>
-        <button id="clearAllButton"
-                class="inline-flex items-center px-3 py-1.5 rounded-full text-xs border border-red-200 text-red-500 bg-red-50 hover:bg-red-100 transition">
-          🧹 清空所有记录
-        </button>
-      </div>
-      <div class="overflow-x-auto text-sm">
-        <table class="min-w-full border-t border-gray-100">
-          <thead class="bg-slate-50 text-gray-500 text-xs">
-          <tr>
-            <th class="px-2 py-1 text-left" id="thDate">日期</th>
-            <th class="px-2 py-1 text-left" id="thTask">项目</th>
-            <th class="px-2 py-1 text-left" id="thStart">开始</th>
-            <th class="px-2 py-1 text-left" id="thEnd">结束</th>
-            <th class="px-2 py-1 text-right" id="thDuration">时长（分钟）</th>
-          </tr>
-          </thead>
-          <tbody id="historyBody" class="divide-y divide-gray-100">
-          </tbody>
-        </table>
-        <p id="historyEmpty" class="text-xs text-gray-400 mt-3">
-          暂无学习记录，开始一次学习后，这里会显示你的历史。
+  <div class="max-w-6xl mx-auto p-4 sm:p-6">
+    <!-- 顶部：标题 + 全局语言切换 + Tab -->
+    <header class="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <!-- 左：标题 -->
+      <div class="space-y-1">
+        <h1 class="text-xl md:text-2xl font-semibold text-gray-900 flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-sky-400 shadow"></span>
+          <span>Dustin 个人 Dashboard</span>
+        </h1>
+        <p class="text-xs md:text-sm text-gray-500">
+          管理日常开销和学习时间，长期跟踪现金流 / Python / 经济学 / 雅思学习进度。
         </p>
       </div>
-      <p class="text-[11px] text-gray-400 mt-3">
-        提示：刷新页面不会丢失数据；如需完全重置，可点击「清空所有记录」。
-      </p>
-    </div>
+
+      <!-- 右：语言切换 + Tab -->
+      <div class="flex flex-col items-stretch md:items-end gap-2">
+        <!-- 全局语言切换（财务 + 学习 共用） -->
+        <div class="flex items-center justify-end gap-2">
+          <span class="hidden md:inline text-[11px] text-gray-400">界面语言</span>
+          <div class="flex rounded-full border border-gray-200 bg-slate-50 text-[11px] overflow-hidden">
+            <button class="lang-switch px-2.5 py-1 border-r border-gray-200 text-gray-600" data-lang="zh">中</button>
+            <button class="lang-switch px-2.5 py-1 border-r border-gray-200 text-gray-600" data-lang="en">EN</button>
+            <button class="lang-switch px-2.5 py-1 text-gray-600" data-lang="ko">한</button>
+          </div>
+        </div>
+
+        <!-- Tab 切换 -->
+        <div class="flex bg-slate-900/90 rounded-full p-1 shadow-sm">
+          <button
+            id="tabFinance"
+            class="px-4 py-1.5 rounded-full text-xs md:text-sm font-medium bg-slate-900 text-sky-100 transition">
+            💰 财务管理
+          </button>
+          <button
+            id="tabStudy"
+            class="px-4 py-1.5 rounded-full text-xs md:text-sm font-medium bg-transparent text-slate-100/80 hover:text-white hover:bg-slate-800 transition">
+            📚 学习时间
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 财务模块 -->
+    <section id="finance-section">
+      <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6">
+
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div class="bg-white p-6 rounded-xl shadow-sm border-l-4"
+               :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              {{ t.dailyAvgTitle }}
+            </p>
+            <p class="text-3xl font-bold mt-2 text-gray-800">
+              ¥ {{ calculateTotal('day').toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}
+            </p>
+          </div>
+          <div class="bg-white p-6 rounded-xl shadow-sm border-l-4"
+               :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              {{ t.monthlyFixedTitle }}
+            </p>
+            <p class="text-3xl font-bold mt-2 text-gray-800">
+              ¥ {{ calculateTotal('month').toLocaleString('zh-CN', {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}
+            </p>
+          </div>
+          <div class="bg-white p-6 rounded-xl shadow-sm border-l-4"
+               :class="currentTab === 'subs' ? 'border-indigo-500' : 'border-red-500'">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              {{ t.yearTotalTitle }}
+            </p>
+            <p class="text-3xl font-bold mt-2 text-gray-800">
+              ¥ {{ calculateTotal('year').toLocaleString('zh-CN', {minimumFractionDigits: 0, maximumFractionDigits: 0}) }}
+            </p>
+          </div>
+        </section>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+          <h3 class="text-lg font-semibold mb-4 text-gray-700">
+            <i class="fa-solid fa-plus-circle mr-2"></i>
+            {{ currentTab === 'subs' ? t.addSubTitle : t.addDebtTitle }}
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+            <input
+              v-model="newItem.name"
+              :placeholder="t.namePlaceholder"
+              class="border rounded px-3 py-2 text-sm focus:ring-2 focus:outline-none md:col-span-2"
+              :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'">
+
+            <div class="relative">
+              <span class="absolute left-3 top-2 text-gray-400 text-sm">$</span>
+              <input
+                v-model.number="newItem.amount"
+                type="number"
+                :placeholder="t.amountPlaceholder"
+                class="border rounded pl-6 pr-3 py-2 text-sm w-full focus:ring-2 focus:outline-none"
+                :class="currentTab === 'subs' ? 'focus:ring-indigo-200' : 'focus:ring-red-200'">
+            </div>
+
+            <select v-model="newItem.currency" class="border rounded px-2 py-2 text-sm bg-white">
+              <option value="CNY">CNY ({{ t.cny }})</option>
+              <option value="USD">USD ({{ t.usd }})</option>
+              <option value="EUR">EUR ({{ t.eur }})</option>
+              <option value="JPY">JPY ({{ t.jpy }})</option>
+              <option value="HKD">HKD ({{ t.hkd }})</option>
+              <option value="GBP">GBP ({{ t.gbp }})</option>
+            </select>
+
+            <select v-model="newItem.period" class="border rounded px-2 py-2 text-sm bg-white">
+              <option value="month">{{ t.periodMonthly }}</option>
+              <option value="year">{{ t.periodYearly }}</option>
+            </select>
+          </div>
+          <button
+            @click="addItem"
+            class="mt-4 w-full text-white font-bold py-2 px-4 rounded transition duration-200"
+            :class="currentTab === 'subs' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700'">
+            {{ t.confirmAdd }}
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <h3 class="font-semibold text-gray-700">{{ t.detailListTitle }}</h3>
+            <span class="text-xs text-gray-500">{{ t.detailListHint }}</span>
+          </div>
+
+          <div v-if="currentList.length === 0" class="p-8 text-center text-gray-400">
+            {{ currentTab === 'subs' ? t.noSubData : t.noDebtData }}
+          </div>
+
+          <ul v-else class="divide-y divide-gray-100">
+            <li
+              v-for="(item, index) in currentList"
+              :key="index"
+              class="p-4 hover:bg-gray-50 flex justify-between items-center group">
+              <div class="flex items-center">
+                <div
+                  class="w-10 h-10 rounded-full flex items-center justify-center mr-4"
+                  :class="currentTab === 'subs' ? 'bg-indigo-100 text-indigo-600' : 'bg-red-100 text-red-600'">
+                  <i class="fa-solid" :class="item.period === 'year' ? 'fa-calendar' : 'fa-calendar-day'"></i>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-800">{{ item.name }}</p>
+                  <p class="text-xs text-gray-500">
+                    {{ t.originalPrice }}: {{ item.currency }} {{ item.amount }}
+                    / {{ item.period === 'year' ? t.perYear : t.perMonth }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="text-right flex items-center gap-4">
+                <div>
+                  <p class="font-bold text-gray-700">
+                    ¥ {{ convertToMonthly(item).toFixed(1) }}
+                  </p>
+                  <p class="text-xs text-gray-400">/ {{ t.perMonth }}</p>
+                </div>
+                <button @click="deleteItem(index)" class="text-gray-300 hover:text-red-500 transition p-2">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="mt-8 text-center text-xs text-gray-400">
+          <p>{{ t.footerLine1 }}</p>
+          <p>{{ t.footerLine2 }}</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 学习计时模块（保持原来的多语言 + 新排版） -->
+    <section id="study-section" class="hidden">
+      <div class="max-w-4xl mx-auto space-y-6">
+        <!-- 顶部：控制区 + 今日进度 -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 md:p-8">
+          <div class="grid gap-6 md:grid-cols-[minmax(0,2.3fr)_minmax(0,2.1fr)] items-stretch">
+            <!-- 左：标题 + 描述 + 存储提示 -->
+            <div class="flex flex-col justify-between gap-4">
+              <div class="space-y-2">
+                <h2 class="text-lg md:text-xl font-semibold text-gray-900 flex items-center">
+                  <i class="fa-solid fa-stopwatch mr-2 text-sky-500"></i>
+                  <span id="studyTitleText">学习时间记录器</span>
+                </h2>
+                <p id="studySubtitleText" class="text-xs md:text-sm text-gray-500 leading-relaxed">
+                  选择项目点击「开始」，结束时点击「结束当前」，系统会自动累计并统计趋势。
+                </p>
+              </div>
+              <span
+                class="inline-flex items-center px-3 py-1 rounded-full bg-slate-50 border border-dashed border-slate-200 text-[11px] text-gray-500">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-2"></span>
+                <span id="localHintText">数据保存在浏览器本地（本机）；点击 ☁︎ 同步 可与云端合并。</span>
+              </span>
+            </div>
+
+            <!-- 右：深色控制面板 -->
+            <div class="bg-slate-900 rounded-2xl text-sky-100 px-4 py-4 md:px-5 md:py-5 flex flex-col gap-4">
+              <!-- 项目选择 + 计时展示 -->
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div class="flex-1">
+                  <label
+                    id="labelTask"
+                    class="block text-[11px] uppercase tracking-wider text-sky-300 mb-1">
+                    学习项目
+                  </label>
+                  <select
+                    id="taskSelect"
+                    class="w-full border-0 rounded-xl text-xs md:text-sm px-3 py-1.5 bg-slate-800 text-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-400">
+                  </select>
+                </div>
+                <div class="flex justify-start md:justify-end flex-1">
+                  <div class="flex flex-col items-start md:items-end">
+                    <span id="labelTimer" class="text-[11px] text-slate-400">实时计时</span>
+                    <span
+                      id="timerDisplay"
+                      class="mt-1 font-mono text-xl md:text-2xl px-3 py-1 rounded-full bg-black/40 text-cyan-300 shadow-inner">
+                      00:00:00
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 控制按钮 -->
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  id="toggleButton"
+                  class="inline-flex items-center justify-center px-4 py-2 rounded-full text-xs md:text-sm font-semibold bg-sky-500 text-white shadow-sm hover:bg-sky-600 transition">
+                  ⏱️ 开始
+                </button>
+                <button
+                  id="stopButton"
+                  class="inline-flex items-center justify-center px-4 py-2 rounded-full text-xs md:text-sm border border-slate-500 text-slate-100 bg-transparent hover:bg-slate-800 transition"
+                  disabled>
+                  ⏹️ 结束当前
+                </button>
+              </div>
+
+              <!-- 账号 + 同步 + 状态 -->
+              <div class="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <input
+                    id="accountIdInput"
+                    class="border rounded-full px-3 py-1.5 text-[11px] w-full sm:w-40 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                    placeholder="账号ID，例如 dustin-main">
+                  <button
+                    id="syncButton"
+                    class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-900 hover:bg-white transition">
+                    ☁︎ 同步
+                  </button>
+                </div>
+                <p id="statusText" class="text-[11px] text-slate-300 mt-1 sm:mt-0">
+                  当前无进行中的学习
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 今日进度（在同一卡片底部） -->
+          <div class="mt-5 border border-dashed border-gray-200 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <span id="todayHeaderText" class="text-xs font-semibold text-gray-600">📅 今日进度（按项目）</span>
+              <span
+                id="todayTotalBadge"
+                class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] bg-slate-100 text-gray-600">
+                今日总学习：0 分钟
+              </span>
+            </div>
+            <div
+              id="todaySummaryGrid"
+              class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+              <!-- JS 填充 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 项目管理 -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 id="taskManageTitle" class="text-sm font-semibold text-gray-800">项目管理</h3>
+              <p id="taskManageSubtitle" class="text-xs text-gray-500 mt-1">
+                添加 / 删除自定义学习项目，并设置每日目标分钟数。
+              </p>
+            </div>
+          </div>
+
+          <div id="taskList" class="space-y-2 mb-4">
+            <!-- JS 填充 项目列表 -->
+          </div>
+
+          <div class="border-t border-gray-100 pt-3 mt-3">
+            <p id="taskNewTitle" class="text-xs font-semibold text-gray-600 mb-2">新增项目</p>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <input
+                id="newTaskNameZh"
+                class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="名称（中文）">
+              <input
+                id="newTaskNameEn"
+                class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="Name (English)">
+              <input
+                id="newTaskNameKo"
+                class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="이름 (한국어)">
+              <input
+                id="newTaskGoal"
+                type="number"
+                min="0"
+                class="border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="每日目标分钟">
+            </div>
+            <button
+              id="addTaskButton"
+              class="mt-3 inline-flex items-center px-4 py-2 rounded-full text-xs font-semibold bg-emerald-500 text-white hover:bg-emerald-600 transition">
+              ➕ 添加项目
+            </button>
+          </div>
+        </div>
+
+        <!-- 最近 7 天图表 -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 id="weeklyTitle" class="text-sm font-semibold text-gray-800">最近 7 天总学习时长</h3>
+              <p id="weeklySubtitle" class="text-xs text-gray-500 mt-1">
+                按天统计所有项目总时长（单位：分钟）。
+              </p>
+            </div>
+          </div>
+          <div class="h-48">
+            <canvas id="weeklyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div class="bg-white rounded-2xl shadow-sm p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 id="historyTitle" class="text-sm font-semibold text-gray-800">最近学习记录</h3>
+              <p id="historySubtitle" class="text-xs text-gray-500 mt-1">
+                显示最近若干次学习的开始时间、结束时间和时长。
+              </p>
+            </div>
+            <button
+              id="clearAllButton"
+              class="inline-flex items-center px-3 py-1.5 rounded-full text-xs border border-red-200 text-red-500 bg-red-50 hover:bg-red-100 transition">
+              🧹 清空所有记录
+            </button>
+          </div>
+          <div class="overflow-x-auto text-sm">
+            <table class="min-w-full border-t border-gray-100">
+              <thead class="bg-slate-50 text-gray-500 text-xs">
+              <tr>
+                <th class="px-2 py-1 text-left" id="thDate">日期</th>
+                <th class="px-2 py-1 text-left" id="thTask">项目</th>
+                <th class="px-2 py-1 text-left" id="thStart">开始</th>
+                <th class="px-2 py-1 text-left" id="thEnd">结束</th>
+                <th class="px-2 py-1 text-right" id="thDuration">时长（分钟）</th>
+              </tr>
+              </thead>
+              <tbody id="historyBody" class="divide-y divide-gray-100">
+              </tbody>
+            </table>
+            <p id="historyEmpty" class="text-xs text-gray-400 mt-3">
+              暂无学习记录，开始一次学习后，这里会显示你的历史。
+            </p>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-3">
+            提示：刷新页面不会丢失数据；如需完全重置，可点击「清空所有记录」。
+          </p>
+        </div>
+      </div>
+    </section>
   </div>
-</section>
 
-    </div>
+  <!-- 顶部 Tab 切换脚本 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const tabFinance = document.getElementById('tabFinance');
+      const tabStudy = document.getElementById('tabStudy');
+      const financeSection = document.getElementById('finance-section');
+      const studySection = document.getElementById('study-section');
 
-    <!-- 顶部 Tab 切换脚本 -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const tabFinance = document.getElementById('tabFinance');
-            const tabStudy = document.getElementById('tabStudy');
-            const financeSection = document.getElementById('finance-section');
-            const studySection = document.getElementById('study-section');
+      const activeClasses = ['bg-slate-900', 'text-sky-100'];
+      const inactiveClasses = ['bg-transparent', 'text-slate-100/80'];
 
-            function activateTab(name) {
-                if (name === 'finance') {
-                    financeSection.classList.remove('hidden');
-                    studySection.classList.add('hidden');
-                    tabFinance.classList.add('bg-indigo-600', 'text-white');
-                    tabFinance.classList.remove('text-gray-600');
-                    tabStudy.classList.remove('bg-indigo-600', 'text-white');
-                    tabStudy.classList.add('text-gray-600');
-                } else {
-                    financeSection.classList.add('hidden');
-                    studySection.classList.remove('hidden');
-                    tabStudy.classList.add('bg-indigo-600', 'text-white');
-                    tabStudy.classList.remove('text-gray-600');
-                    tabFinance.classList.remove('bg-indigo-600', 'text-white');
-                    tabFinance.classList.add('text-gray-600');
-                }
-            }
-
-            tabFinance.addEventListener('click', () => activateTab('finance'));
-            tabStudy.addEventListener('click', () => activateTab('study'));
-        });
-    </script>
-
-    <!-- 原 Vue 财务系统脚本 -->
-    <script>
-        const { createApp, ref, computed, onMounted, watch } = Vue;
-
-        createApp({
-            setup() {
-                const currentTab = ref('subs'); // subs or debt
-                const rates = ref({});
-                
-                const subscriptions = ref([]);
-                const debts = ref([]);
-                
-                const newItem = ref({
-                    name: '',
-                    amount: '',
-                    currency: 'USD',
-                    period: 'month'
-                });
-
-                const fetchRates = async () => {
-                    try {
-                        const res = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
-                        const data = await res.json();
-                        
-                        const cnyBasedRates = {};
-                        for (const [key, value] of Object.entries(data.rates)) {
-                            cnyBasedRates[key] = 1 / value;
-                        }
-                        cnyBasedRates['CNY'] = 1;
-                        rates.value = cnyBasedRates;
-                    } catch (e) {
-                        console.error("汇率获取失败，使用默认值", e);
-                        rates.value = { USD: 7.2, CNY: 1, EUR: 7.8, JPY: 0.048, HKD: 0.92, GBP: 9.1 };
-                    }
-                };
-
-                const convertToMonthly = (item) => {
-                    if (!item.amount || !rates.value[item.currency]) return 0;
-                    
-                    const rate = rates.value[item.currency];
-                    let monthlyCNY = 0;
-
-                    if (item.period === 'month') {
-                        monthlyCNY = item.amount * rate;
-                    } else if (item.period === 'year') {
-                        monthlyCNY = (item.amount * rate) / 12;
-                    }
-                    
-                    return monthlyCNY;
-                };
-
-                const calculateTotal = (scale) => {
-                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                    let totalMonthly = list.reduce((sum, item) => sum + convertToMonthly(item), 0);
-                    
-                    if (scale === 'month') return totalMonthly;
-                    if (scale === 'year') return totalMonthly * 12;
-                    if (scale === 'day') return totalMonthly / 30.44;
-                    return 0;
-                };
-
-                const addItem = () => {
-                    if (!newItem.value.name || !newItem.value.amount) return alert("请填写完整信息");
-                    
-                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                    list.push({ ...newItem.value });
-                    
-                    newItem.value.name = '';
-                    newItem.value.amount = '';
-                };
-
-                const deleteItem = (index) => {
-                    const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                    list.splice(index, 1);
-                };
-
-                const currentList = computed(() => {
-                    return currentTab.value === 'subs' ? subscriptions.value : debts.value;
-                });
-
-                onMounted(() => {
-                    fetchRates();
-                    const savedSubs = localStorage.getItem('my_finance_subs');
-                    const savedDebts = localStorage.getItem('my_finance_debts');
-                    if (savedSubs) subscriptions.value = JSON.parse(savedSubs);
-                    if (savedDebts) debts.value = JSON.parse(savedDebts);
-                });
-
-                watch(subscriptions, (newVal) => localStorage.setItem('my_finance_subs', JSON.stringify(newVal)), { deep: true });
-                watch(debts, (newVal) => localStorage.setItem('my_finance_debts', JSON.stringify(newVal)), { deep: true });
-
-                return {
-                    currentTab,
-                    newItem,
-                    addItem,
-                    deleteItem,
-                    rates,
-                    currentList,
-                    calculateTotal,
-                    convertToMonthly
-                };
-            }
-        }).mount('#app');
-    </script>
-
-<!-- 学习计时器脚本（自定义项目 + 多语言 + Supabase 云同步） -->
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    // 如果学习模块不存在，直接跳过
-    if (!document.getElementById('study-section')) return;
-
-    // ====== Supabase 配置（使用你的项目参数）======
-    const SUPABASE_URL = 'https://xclzhqevtkaheaupzfdk.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjbHpocWV2dGthaGVhdXB6ZmRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxOTYxMjIsImV4cCI6MjA3OTc3MjEyMn0.OYmKjQK6DsFyzsU9ugmF-X0oNDCPSFdXb6Qb5cxrcIc';
-
-    const supabaseClient =
-      window.supabase && window.supabase.createClient
-        ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-        : null;
-
-    const ACCOUNT_ID_STORAGE_KEY = 'studyAccountId_v1';
-
-    // ====== 常量 & 存储 key ======
-    const TASKS_STORAGE_KEY = 'studyTasks_v1';
-    const SESSIONS_STORAGE_KEY = 'studySessions_v1';
-    const CURRENT_SESSION_KEY = 'currentStudySession_v1';
-    const LANG_STORAGE_KEY = 'studyLang_v1';
-
-    // 默认项目（首次打开时生成）
-    const DEFAULT_TASKS = [
-      {
-        id: 'ielts',
-        names: { zh: '雅思', en: 'IELTS', ko: '아이엘츠' },
-        goal: 120
-      },
-      {
-        id: 'python',
-        names: { zh: 'Python', en: 'Python', ko: '파이썬' },
-        goal: 30
-      },
-      {
-        id: 'economics',
-        names: { zh: '经济 / 金融', en: 'Economics / Finance', ko: '경제 / 금융' },
-        goal: 20
-      },
-      {
-        id: 'fitness',
-        names: { zh: '健身', en: 'Workout', ko: '운동' },
-        goal: 30
+      function setActive(tab, isActive) {
+        if (!tab) return;
+        if (isActive) {
+          tab.classList.add(...activeClasses);
+          tab.classList.remove(...inactiveClasses);
+        } else {
+          tab.classList.remove(...activeClasses);
+          tab.classList.add(...inactiveClasses);
+        }
       }
-    ];
 
-    // 简单多语言字典
-    const I18N = {
+      function activateTab(name) {
+        if (name === 'finance') {
+          financeSection.classList.remove('hidden');
+          studySection.classList.add('hidden');
+          setActive(tabFinance, true);
+          setActive(tabStudy, false);
+        } else {
+          financeSection.classList.add('hidden');
+          studySection.classList.remove('hidden');
+          setActive(tabFinance, false);
+          setActive(tabStudy, true);
+        }
+      }
+
+      tabFinance.addEventListener('click', () => activateTab('finance'));
+      tabStudy.addEventListener('click', () => activateTab('study'));
+
+      activateTab('finance');
+    });
+  </script>
+
+  <!-- Vue 财务系统脚本（带多语言） -->
+  <script>
+    const { createApp, ref, computed, onMounted, watch } = Vue;
+
+    const financeI18N = {
       zh: {
-        financeTab: '💰 财务管理',
-        studyTab: '📚 学习计时器',
-        studyTitle: '学习时间记录器',
-        studySubtitle: '选择项目点击「开始」，结束时点击「结束当前」，系统会自动累计并统计趋势。',
-        localHint: '数据保存在浏览器本地（本机）；点击 ☁︎ 同步 可与云端合并。',
-        labelTask: '学习项目',
-        labelTimer: '实时计时',
-        btnStart: '⏱️ 开始',
-        btnPause: '⏸️ 暂停并保存',
-        btnStop: '⏹️ 结束当前',
-        statusIdle: '当前无进行中的学习',
-        statusRunningPrefix: '正在学习：',
-        statusRunningAt: '· 开始于 ',
-        todayHeader: '📅 今日进度（按项目）',
-        todayTotalPrefix: '今日总学习：',
-        todayTotalSuffix: ' 分钟',
-        taskManageTitle: '项目管理',
-        taskManageSubtitle: '添加 / 删除自定义学习项目，并设置每日目标分钟数。',
-        taskNewTitle: '新增项目',
-        taskListEmpty: '暂无项目，请先添加至少一个学习项目。',
-        taskGoalLabel: '目标：',
-        taskGoalUnit: ' 分钟 / 天',
-        btnAddTask: '➕ 添加项目',
-        weeklyTitle: '最近 7 天总学习时长',
-        weeklySubtitle: '按天统计所有项目总时长（单位：分钟）。',
-        historyTitle: '最近学习记录',
-        historySubtitle: '显示最近若干次学习的开始时间、结束时间和时长。',
-        thDate: '日期',
-        thTask: '项目',
-        thStart: '开始',
-        thEnd: '结束',
-        thDuration: '时长（分钟）',
-        btnClearAll: '🧹 清空所有记录',
-        historyEmpty: '暂无学习记录，开始一次学习后，这里会显示你的历史。',
-        deletedTask: '[已删除项目]',
-        syncWorking: '正在与云端同步…',
-        syncDone: '同步完成',
-        syncNeedId: '请先输入账号 ID（例如 dustin-main）',
-        syncError: '同步失败：'
+        dailyAvgTitle: '每日均摊 (CNY)',
+        monthlyFixedTitle: '每月固定 (CNY)',
+        yearTotalTitle: '年度总成本 (CNY)',
+        addSubTitle: '添加订阅项目',
+        addDebtTitle: '添加债务',
+        namePlaceholder: '项目名称 (如: ChatGPT)',
+        amountPlaceholder: '金额',
+        cny: '人民币',
+        usd: '美元',
+        eur: '欧元',
+        jpy: '日元',
+        hkd: '港币',
+        gbp: '英镑',
+        periodMonthly: '每月付',
+        periodYearly: '每年付',
+        confirmAdd: '确认添加',
+        detailListTitle: '详细清单',
+        detailListHint: '自动换算为 CNY 展示',
+        noSubData: '暂无数据，请添加您的第一笔订阅。',
+        noDebtData: '暂无数据，请添加您的第一笔债务。',
+        originalPrice: '原价',
+        perMonth: '月',
+        perYear: '年',
+        footerLine1: '数据存储在您的本地浏览器中，清除缓存可能会导致数据丢失。',
+        footerLine2: '汇率数据来源: ExchangeRate-API'
       },
       en: {
-        financeTab: '💰 Finance',
-        studyTab: '📚 Study Tracker',
-        studyTitle: 'Study Time Tracker',
-        studySubtitle: 'Select a task and click "Start". Click "Stop" to save the session and update stats.',
-        localHint: 'Data is stored locally. Click ☁︎ to sync with cloud.',
-        labelTask: 'Study task',
-        labelTimer: 'Timer',
-        btnStart: '⏱️ Start',
-        btnPause: '⏸️ Pause & Save',
-        btnStop: '⏹️ Stop',
-        statusIdle: 'No active session.',
-        statusRunningPrefix: 'Now studying: ',
-        statusRunningAt: '· started at ',
-        todayHeader: '📅 Today (by task)',
-        todayTotalPrefix: 'Total today: ',
-        todayTotalSuffix: ' min',
-        taskManageTitle: 'Task management',
-        taskManageSubtitle: 'Add / remove custom study tasks and set daily goals (minutes).',
-        taskNewTitle: 'New task',
-        taskListEmpty: 'No tasks yet. Please add at least one study task.',
-        taskGoalLabel: 'Goal: ',
-        taskGoalUnit: ' min / day',
-        btnAddTask: '➕ Add task',
-        weeklyTitle: 'Last 7 days total study time',
-        weeklySubtitle: 'Total minutes per day across all tasks.',
-        historyTitle: 'Recent sessions',
-        historySubtitle: 'Shows recent study sessions with start, end and duration.',
-        thDate: 'Date',
-        thTask: 'Task',
-        thStart: 'Start',
-        thEnd: 'End',
-        thDuration: 'Duration (min)',
-        btnClearAll: '🧹 Clear all',
-        historyEmpty: 'No sessions yet. Start studying to see history here.',
-        deletedTask: '[deleted task]',
-        syncWorking: 'Syncing with cloud…',
-        syncDone: 'Sync finished',
-        syncNeedId: 'Please enter an account ID first (e.g. dustin-main).',
-        syncError: 'Sync failed: '
+        dailyAvgTitle: 'Daily average (CNY)',
+        monthlyFixedTitle: 'Monthly total (CNY)',
+        yearTotalTitle: 'Yearly total (CNY)',
+        addSubTitle: 'Add subscription',
+        addDebtTitle: 'Add debt',
+        namePlaceholder: 'Item name (e.g. ChatGPT)',
+        amountPlaceholder: 'Amount',
+        cny: 'CNY',
+        usd: 'USD',
+        eur: 'EUR',
+        jpy: 'JPY',
+        hkd: 'HKD',
+        gbp: 'GBP',
+        periodMonthly: 'Monthly',
+        periodYearly: 'Yearly',
+        confirmAdd: 'Add',
+        detailListTitle: 'Detail list',
+        detailListHint: 'Converted to CNY for display',
+        noSubData: 'No data yet. Please add your first subscription.',
+        noDebtData: 'No data yet. Please add your first debt item.',
+        originalPrice: 'Original',
+        perMonth: 'month',
+        perYear: 'year',
+        footerLine1: 'Data is stored in your local browser. Clearing cache may remove all records.',
+        footerLine2: 'Exchange rates powered by ExchangeRate-API.'
       },
       ko: {
-        financeTab: '💰 재무 관리',
-        studyTab: '📚 공부 타이머',
-        studyTitle: '공부 시간 기록기',
-        studySubtitle: '항목을 선택하고「시작」을 누르세요. 끝나면「정지」를 눌러 기록합니다.',
-        localHint: '데이터는 이 브라우저에 저장됩니다. ☁︎ 버튼으로 클라우드와 동기화할 수 있습니다.',
-        labelTask: '공부 항목',
-        labelTimer: '타이머',
-        btnStart: '⏱️ 시작',
-        btnPause: '⏸️ 일시정지 & 저장',
-        btnStop: '⏹️ 정지',
-        statusIdle: '진행 중인 공부가 없습니다.',
-        statusRunningPrefix: '공부 중: ',
-        statusRunningAt: '· 시작 시간 ',
-        todayHeader: '📅 오늘 진행 상황 (항목별)',
-        todayTotalPrefix: '오늘 총 공부: ',
-        todayTotalSuffix: ' 분',
-        taskManageTitle: '항목 관리',
-        taskManageSubtitle: '공부 항목을 추가/삭제하고 하루 목표 시간을 설정합니다.',
-        taskNewTitle: '새 항목',
-        taskListEmpty: '아직 항목이 없습니다. 먼저 공부 항목을 추가하세요.',
-        taskGoalLabel: '목표: ',
-        taskGoalUnit: ' 분 / 일',
-        btnAddTask: '➕ 항목 추가',
-        weeklyTitle: '최근 7일 공부 총 시간',
-        weeklySubtitle: '모든 항목을 합친 하루별 분량입니다.',
-        historyTitle: '최근 공부 기록',
-        historySubtitle: '공부 시작/종료 시간과 소요 시간을 보여줍니다.',
-        thDate: '날짜',
-        thTask: '항목',
-        thStart: '시작',
-        thEnd: '종료',
-        thDuration: '소요 시간(분)',
-        btnClearAll: '🧹 전체 삭제',
-        historyEmpty: '아직 기록이 없습니다. 공부를 시작하면 여기에 표시됩니다.',
-        deletedTask: '[삭제된 항목]',
-        syncWorking: '클라우드와 동기화 중…',
-        syncDone: '동기화 완료',
-        syncNeedId: '먼저 계정 ID를 입력하세요. (예: dustin-main)',
-        syncError: '동기화 실패: '
+        dailyAvgTitle: '일일 평균 (CNY)',
+        monthlyFixedTitle: '월 고정 비용 (CNY)',
+        yearTotalTitle: '연간 총 비용 (CNY)',
+        addSubTitle: '구독 항목 추가',
+        addDebtTitle: '부채 추가',
+        namePlaceholder: '항목 이름 (예: ChatGPT)',
+        amountPlaceholder: '금액',
+        cny: '위안',
+        usd: '달러',
+        eur: '유로',
+        jpy: '엔',
+        hkd: '홍콩달러',
+        gbp: '파운드',
+        periodMonthly: '월 납부',
+        periodYearly: '연 납부',
+        confirmAdd: '추가하기',
+        detailListTitle: '상세 목록',
+        detailListHint: '표시는 CNY 기준으로 환산됩니다.',
+        noSubData: '아직 데이터가 없습니다. 첫 구독 항목을 추가해 주세요.',
+        noDebtData: '아직 데이터가 없습니다. 첫 부채 항목을 추가해 주세요.',
+        originalPrice: '원가',
+        perMonth: '월',
+        perYear: '년',
+        footerLine1: '데이터는 브라우저에 저장되며, 캐시를 삭제하면 기록이 지워질 수 있습니다.',
+        footerLine2: '환율 데이터: ExchangeRate-API.'
       }
     };
 
-    // ====== 状态 ======
-    let currentLang = localStorage.getItem(LANG_STORAGE_KEY) || 'zh';
-    let tasks = [];
-    let sessions = [];
-    let currentSession = null;
-    let timerId = null;
-    let weeklyChart = null;
-    let currentAccountId = localStorage.getItem(ACCOUNT_ID_STORAGE_KEY) || '';
+    createApp({
+      setup() {
+        const currentTab = ref('subs');
+        const rates = ref({});
+        const subscriptions = ref([]);
+        const debts = ref([]);
+        const newItem = ref({
+          name: '',
+          amount: '',
+          currency: 'USD',
+          period: 'month'
+        });
 
-    // ====== DOM 元素 ======
-    const tabFinanceEl = document.getElementById('tabFinance');
-    const tabStudyEl = document.getElementById('tabStudy');
+        const appLang = ref(window.__dashboardLang || localStorage.getItem('studyLang_v1') || 'zh');
+        const t = computed(() => financeI18N[appLang.value] || financeI18N.zh);
 
-    const studyTitleTextEl = document.getElementById('studyTitleText');
-    const studySubtitleTextEl = document.getElementById('studySubtitleText');
-    const localHintTextEl = document.getElementById('localHintText');
-    const labelTaskEl = document.getElementById('labelTask');
-    const labelTimerEl = document.getElementById('labelTimer');
+        window.__updateFinanceLang = (newLang) => {
+          appLang.value = newLang;
+        };
 
-    const taskSelectEl = document.getElementById('taskSelect');
-    const toggleButtonEl = document.getElementById('toggleButton');
-    const stopButtonEl = document.getElementById('stopButton');
-    const timerDisplayEl = document.getElementById('timerDisplay');
-    const statusTextEl = document.getElementById('statusText');
+        const fetchRates = async () => {
+          try {
+            const res = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
+            const data = await res.json();
 
-    const todayHeaderTextEl = document.getElementById('todayHeaderText');
-    const todayTotalBadgeEl = document.getElementById('todayTotalBadge');
-    const todaySummaryGridEl = document.getElementById('todaySummaryGrid');
+            const cnyBasedRates = {};
+            for (const [key, value] of Object.entries(data.rates)) {
+              cnyBasedRates[key] = 1 / value;
+            }
+            cnyBasedRates['CNY'] = 1;
+            rates.value = cnyBasedRates;
+          } catch (e) {
+            console.error("汇率获取失败，使用默认值", e);
+            rates.value = { USD: 7.2, CNY: 1, EUR: 7.8, JPY: 0.048, HKD: 0.92, GBP: 9.1 };
+          }
+        };
 
-    const taskListEl = document.getElementById('taskList');
-    const newTaskNameZhEl = document.getElementById('newTaskNameZh');
-    const newTaskNameEnEl = document.getElementById('newTaskNameEn');
-    const newTaskNameKoEl = document.getElementById('newTaskNameKo');
-    const newTaskGoalEl = document.getElementById('newTaskGoal');
-    const addTaskButtonEl = document.getElementById('addTaskButton');
+        const convertToMonthly = (item) => {
+          if (!item.amount || !rates.value[item.currency]) return 0;
 
-    const taskManageTitleEl = document.getElementById('taskManageTitle');
-    const taskManageSubtitleEl = document.getElementById('taskManageSubtitle');
-    const taskNewTitleEl = document.getElementById('taskNewTitle');
+          const rate = rates.value[item.currency];
+          let monthlyCNY = 0;
 
-    const weeklyTitleEl = document.getElementById('weeklyTitle');
-    const weeklySubtitleEl = document.getElementById('weeklySubtitle');
+          if (item.period === 'month') {
+            monthlyCNY = item.amount * rate;
+          } else if (item.period === 'year') {
+            monthlyCNY = (item.amount * rate) / 12;
+          }
 
-    const historyTitleEl = document.getElementById('historyTitle');
-    const historySubtitleEl = document.getElementById('historySubtitle');
-    const historyBodyEl = document.getElementById('historyBody');
-    const historyEmptyEl = document.getElementById('historyEmpty');
-    const clearAllButtonEl = document.getElementById('clearAllButton');
+          return monthlyCNY;
+        };
 
-    const thDateEl = document.getElementById('thDate');
-    const thTaskEl = document.getElementById('thTask');
-    const thStartEl = document.getElementById('thStart');
-    const thEndEl = document.getElementById('thEnd');
-    const thDurationEl = document.getElementById('thDuration');
+        const calculateTotal = (scale) => {
+          const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+          let totalMonthly = list.reduce((sum, item) => sum + convertToMonthly(item), 0);
 
-    const langButtons = document.querySelectorAll('.lang-switch');
+          if (scale === 'month') return totalMonthly;
+          if (scale === 'year') return totalMonthly * 12;
+          if (scale === 'day') return totalMonthly / 30.44;
+          return 0;
+        };
 
-    const accountIdInputEl = document.getElementById('accountIdInput');
-    const syncButtonEl = document.getElementById('syncButton');
+        const addItem = () => {
+          if (!newItem.value.name || !newItem.value.amount) {
+            alert(appLang.value === 'en' ? 'Please fill all fields.' : '请填写完整信息');
+            return;
+          }
+          const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+          list.push({ ...newItem.value });
 
-    if (accountIdInputEl) {
-      accountIdInputEl.value = currentAccountId;
-    }
+          newItem.value.name = '';
+          newItem.value.amount = '';
+        };
 
-    // ====== 工具函数：存储 ======
-    function loadTasks() {
-      try {
-        const raw = localStorage.getItem(TASKS_STORAGE_KEY);
-        if (!raw) {
+        const deleteItem = (index) => {
+          const list = currentTab.value === 'subs' ? subscriptions.value : debts.value;
+          list.splice(index, 1);
+        };
+
+        const currentList = computed(() => {
+          return currentTab.value === 'subs' ? subscriptions.value : debts.value;
+        });
+
+        onMounted(() => {
+          fetchRates();
+          const savedSubs = localStorage.getItem('my_finance_subs');
+          const savedDebts = localStorage.getItem('my_finance_debts');
+          if (savedSubs) subscriptions.value = JSON.parse(savedSubs);
+          if (savedDebts) debts.value = JSON.parse(savedDebts);
+        });
+
+        watch(subscriptions, (newVal) => localStorage.setItem('my_finance_subs', JSON.stringify(newVal)), { deep: true });
+        watch(debts, (newVal) => localStorage.setItem('my_finance_debts', JSON.stringify(newVal)), { deep: true });
+
+        return {
+          currentTab,
+          newItem,
+          addItem,
+          deleteItem,
+          rates,
+          currentList,
+          calculateTotal,
+          convertToMonthly,
+          t,
+          appLang
+        };
+      }
+    }).mount('#app');
+  </script>
+
+  <!-- 学习计时器脚本（原有多语言 + 同步 finance） -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!document.getElementById('study-section')) return;
+
+      const SUPABASE_URL = 'https://xclzhqevtkaheaupzfdk.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjbHpocWV2dGthaGVhdXB6ZmRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxOTYxMjIsImV4cCI6MjA3OTc3MjEyMn0.OYmKjQK6DsFyzsU9ugmF-X0oNDCPSFdXb6Qb5cxrcIc';
+
+      const supabaseClient =
+        window.supabase && window.supabase.createClient
+          ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+          : null;
+
+      const ACCOUNT_ID_STORAGE_KEY = 'studyAccountId_v1';
+
+      const TASKS_STORAGE_KEY = 'studyTasks_v1';
+      const SESSIONS_STORAGE_KEY = 'studySessions_v1';
+      const CURRENT_SESSION_KEY = 'currentStudySession_v1';
+      const LANG_STORAGE_KEY = 'studyLang_v1';
+
+      const DEFAULT_TASKS = [
+        {
+          id: 'ielts',
+          names: { zh: '雅思', en: 'IELTS', ko: '아이엘츠' },
+          goal: 120
+        },
+        {
+          id: 'python',
+          names: { zh: 'Python', en: 'Python', ko: '파이썬' },
+          goal: 30
+        },
+        {
+          id: 'economics',
+          names: { zh: '经济 / 金融', en: 'Economics / Finance', ko: '경제 / 금융' },
+          goal: 20
+        },
+        {
+          id: 'fitness',
+          names: { zh: '健身', en: 'Workout', ko: '운동' },
+          goal: 30
+        }
+      ];
+
+      const I18N = {
+        zh: {
+          financeTab: '💰 财务管理',
+          studyTab: '📚 学习计时器',
+          studyTitle: '学习时间记录器',
+          studySubtitle: '选择项目点击「开始」，结束时点击「结束当前」，系统会自动累计并统计趋势。',
+          localHint: '数据保存在浏览器本地（本机）；点击 ☁︎ 同步 可与云端合并。',
+          labelTask: '学习项目',
+          labelTimer: '实时计时',
+          btnStart: '⏱️ 开始',
+          btnPause: '⏸️ 暂停并保存',
+          btnStop: '⏹️ 结束当前',
+          statusIdle: '当前无进行中的学习',
+          statusRunningPrefix: '正在学习：',
+          statusRunningAt: '· 开始于 ',
+          todayHeader: '📅 今日进度（按项目）',
+          todayTotalPrefix: '今日总学习：',
+          todayTotalSuffix: ' 分钟',
+          taskManageTitle: '项目管理',
+          taskManageSubtitle: '添加 / 删除自定义学习项目，并设置每日目标分钟数。',
+          taskNewTitle: '新增项目',
+          taskListEmpty: '暂无项目，请先添加至少一个学习项目。',
+          taskGoalLabel: '目标：',
+          taskGoalUnit: ' 分钟 / 天',
+          btnAddTask: '➕ 添加项目',
+          weeklyTitle: '最近 7 天总学习时长',
+          weeklySubtitle: '按天统计所有项目总时长（单位：分钟）。',
+          historyTitle: '最近学习记录',
+          historySubtitle: '显示最近若干次学习的开始时间、结束时间和时长。',
+          thDate: '日期',
+          thTask: '项目',
+          thStart: '开始',
+          thEnd: '结束',
+          thDuration: '时长（分钟）',
+          btnClearAll: '🧹 清空所有记录',
+          historyEmpty: '暂无学习记录，开始一次学习后，这里会显示你的历史。',
+          deletedTask: '[已删除项目]',
+          syncWorking: '正在与云端同步…',
+          syncDone: '同步完成',
+          syncNeedId: '请先输入账号 ID（例如 dustin-main）',
+          syncError: '同步失败：'
+        },
+        en: {
+          financeTab: '💰 Finance',
+          studyTab: '📚 Study Tracker',
+          studyTitle: 'Study Time Tracker',
+          studySubtitle: 'Select a task and click "Start". Click "Stop" to save the session and update stats.',
+          localHint: 'Data is stored locally. Click ☁︎ to sync with cloud.',
+          labelTask: 'Study task',
+          labelTimer: 'Timer',
+          btnStart: '⏱️ Start',
+          btnPause: '⏸️ Pause & Save',
+          btnStop: '⏹️ Stop',
+          statusIdle: 'No active session.',
+          statusRunningPrefix: 'Now studying: ',
+          statusRunningAt: '· started at ',
+          todayHeader: '📅 Today (by task)',
+          todayTotalPrefix: 'Total today: ',
+          todayTotalSuffix: ' min',
+          taskManageTitle: 'Task management',
+          taskManageSubtitle: 'Add / remove custom study tasks and set daily goals (minutes).',
+          taskNewTitle: 'New task',
+          taskListEmpty: 'No tasks yet. Please add at least one study task.',
+          taskGoalLabel: 'Goal: ',
+          taskGoalUnit: ' min / day',
+          btnAddTask: '➕ Add task',
+          weeklyTitle: 'Last 7 days total study time',
+          weeklySubtitle: 'Total minutes per day across all tasks.',
+          historyTitle: 'Recent sessions',
+          historySubtitle: 'Shows recent study sessions with start, end and duration.',
+          thDate: 'Date',
+          thTask: 'Task',
+          thStart: 'Start',
+          thEnd: 'End',
+          thDuration: 'Duration (min)',
+          btnClearAll: '🧹 Clear all',
+          historyEmpty: 'No sessions yet. Start studying to see history here.',
+          deletedTask: '[deleted task]',
+          syncWorking: 'Syncing with cloud…',
+          syncDone: 'Sync finished',
+          syncNeedId: 'Please enter an account ID first (e.g. dustin-main).',
+          syncError: 'Sync failed: '
+        },
+        ko: {
+          financeTab: '💰 재무 관리',
+          studyTab: '📚 공부 타이머',
+          studyTitle: '공부 시간 기록기',
+          studySubtitle: '항목을 선택하고「시작」을 누르세요. 끝나면「정지」를 눌러 기록합니다.',
+          localHint: '데이터는 이 브라우저에 저장됩니다. ☁︎ 버튼으로 클라우드와 동기화할 수 있습니다.',
+          labelTask: '공부 항목',
+          labelTimer: '타이머',
+          btnStart: '⏱️ 시작',
+          btnPause: '⏸️ 일시정지 & 저장',
+          btnStop: '⏹️ 정지',
+          statusIdle: '진행 중인 공부가 없습니다.',
+          statusRunningPrefix: '공부 중: ',
+          statusRunningAt: '· 시작 시간 ',
+          todayHeader: '📅 오늘 진행 상황 (항목별)',
+          todayTotalPrefix: '오늘 총 공부: ',
+          todayTotalSuffix: ' 분',
+          taskManageTitle: '항목 관리',
+          taskManageSubtitle: '공부 항목을 추가/삭제하고 하루 목표 시간을 설정합니다.',
+          taskNewTitle: '새 항목',
+          taskListEmpty: '아직 항목이 없습니다. 먼저 공부 항목을 추가하세요.',
+          taskGoalLabel: '목표: ',
+          taskGoalUnit: ' 분 / 일',
+          btnAddTask: '➕ 항목 추가',
+          weeklyTitle: '최근 7일 공부 총 시간',
+          weeklySubtitle: '모든 항목을 합친 하루별 분량입니다.',
+          historyTitle: '최근 공부 기록',
+          historySubtitle: '공부 시작/종료 시간과 소요 시간을 보여줍니다.',
+          thDate: '날짜',
+          thTask: '항목',
+          thStart: '시작',
+          thEnd: '종료',
+          thDuration: '소요 시간(분)',
+          btnClearAll: '🧹 전체 삭제',
+          historyEmpty: '아직 기록이 없습니다. 공부를 시작하면 여기에 표시됩니다.',
+          deletedTask: '[삭제된 항목]',
+          syncWorking: '클라우드와 동기화 중…',
+          syncDone: '동기화 완료',
+          syncNeedId: '먼저 계정 ID를 입력하세요. (예: dustin-main)',
+          syncError: '동기화 실패: '
+        }
+      };
+
+      let currentLang = localStorage.getItem(LANG_STORAGE_KEY) || 'zh';
+      window.__dashboardLang = currentLang;
+
+      let tasks = [];
+      let sessions = [];
+      let currentSession = null;
+      let timerId = null;
+      let weeklyChart = null;
+      let currentAccountId = localStorage.getItem(ACCOUNT_ID_STORAGE_KEY) || '';
+
+      const tabFinanceEl = document.getElementById('tabFinance');
+      const tabStudyEl = document.getElementById('tabStudy');
+
+      const studyTitleTextEl = document.getElementById('studyTitleText');
+      const studySubtitleTextEl = document.getElementById('studySubtitleText');
+      const localHintTextEl = document.getElementById('localHintText');
+      const labelTaskEl = document.getElementById('labelTask');
+      const labelTimerEl = document.getElementById('labelTimer');
+
+      const taskSelectEl = document.getElementById('taskSelect');
+      const toggleButtonEl = document.getElementById('toggleButton');
+      const stopButtonEl = document.getElementById('stopButton');
+      const timerDisplayEl = document.getElementById('timerDisplay');
+      const statusTextEl = document.getElementById('statusText');
+
+      const todayHeaderTextEl = document.getElementById('todayHeaderText');
+      const todayTotalBadgeEl = document.getElementById('todayTotalBadge');
+      const todaySummaryGridEl = document.getElementById('todaySummaryGrid');
+
+      const taskListEl = document.getElementById('taskList');
+      const newTaskNameZhEl = document.getElementById('newTaskNameZh');
+      const newTaskNameEnEl = document.getElementById('newTaskNameEn');
+      const newTaskNameKoEl = document.getElementById('newTaskNameKo');
+      const newTaskGoalEl = document.getElementById('newTaskGoal');
+      const addTaskButtonEl = document.getElementById('addTaskButton');
+
+      const taskManageTitleEl = document.getElementById('taskManageTitle');
+      const taskManageSubtitleEl = document.getElementById('taskManageSubtitle');
+      const taskNewTitleEl = document.getElementById('taskNewTitle');
+
+      const weeklyTitleEl = document.getElementById('weeklyTitle');
+      const weeklySubtitleEl = document.getElementById('weeklySubtitle');
+
+      const historyTitleEl = document.getElementById('historyTitle');
+      const historySubtitleEl = document.getElementById('historySubtitle');
+      const historyBodyEl = document.getElementById('historyBody');
+      const historyEmptyEl = document.getElementById('historyEmpty');
+      const clearAllButtonEl = document.getElementById('clearAllButton');
+
+      const thDateEl = document.getElementById('thDate');
+      const thTaskEl = document.getElementById('thTask');
+      const thStartEl = document.getElementById('thStart');
+      const thEndEl = document.getElementById('thEnd');
+      const thDurationEl = document.getElementById('thDuration');
+
+      const langButtons = document.querySelectorAll('.lang-switch');
+
+      const accountIdInputEl = document.getElementById('accountIdInput');
+      const syncButtonEl = document.getElementById('syncButton');
+
+      if (accountIdInputEl) {
+        accountIdInputEl.value = currentAccountId;
+      }
+
+      function loadTasks() {
+        try {
+          const raw = localStorage.getItem(TASKS_STORAGE_KEY);
+          if (!raw) {
+            tasks = DEFAULT_TASKS.slice();
+            saveTasks();
+          } else {
+            const parsed = JSON.parse(raw);
+            tasks = Array.isArray(parsed) ? parsed : DEFAULT_TASKS.slice();
+          }
+        } catch {
           tasks = DEFAULT_TASKS.slice();
           saveTasks();
-        } else {
+        }
+      }
+
+      function saveTasks() {
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      }
+
+      function loadSessions() {
+        try {
+          const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
+          if (!raw) return [];
           const parsed = JSON.parse(raw);
-          tasks = Array.isArray(parsed) ? parsed : DEFAULT_TASKS.slice();
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
         }
-      } catch {
-        tasks = DEFAULT_TASKS.slice();
-        saveTasks();
       }
-    }
 
-    function saveTasks() {
-      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-    }
-
-    function loadSessions() {
-      try {
-        const raw = localStorage.getItem(SESSIONS_STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        return [];
+      function saveSessions() {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
       }
-    }
 
-    function saveSessions() {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-    }
-
-    function loadCurrentSession() {
-      try {
-        const raw = localStorage.getItem(CURRENT_SESSION_KEY);
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (!parsed || !parsed.taskId || !parsed.start) return null;
-        return parsed;
-      } catch {
-        return null;
-      }
-    }
-
-    function saveCurrentSession(session) {
-      localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
-    }
-
-    function clearCurrentSession() {
-      localStorage.removeItem(CURRENT_SESSION_KEY);
-    }
-
-    function setCurrentAccountId(id) {
-      currentAccountId = (id || '').trim();
-      localStorage.setItem(ACCOUNT_ID_STORAGE_KEY, currentAccountId);
-    }
-
-    // ====== 工具函数：时间 & 数据 ======
-    function computeDurationMinutes(startISO, endISO) {
-      const start = new Date(startISO);
-      const end = new Date(endISO);
-      const diffMs = end - start;
-      if (isNaN(diffMs) || diffMs <= 0) return 0;
-      return diffMs / 60000;
-    }
-
-    function formatTimeHM(date) {
-      return date.toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-    }
-
-    function formatDateYMD(date) {
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-    }
-
-    function formatTimerDisplay(totalSeconds) {
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      const pad = n => String(n).padStart(2, '0');
-      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-    }
-
-    function isSameDate(a, b) {
-      return (
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate()
-      );
-    }
-
-    function getTodaySessions(all) {
-      const today = new Date();
-      return all.filter(s => isSameDate(new Date(s.start), today));
-    }
-
-    function sumByTask(sessionsList) {
-      const result = {};
-      for (const s of sessionsList) {
-        if (!s.end) continue;
-        const minutes = computeDurationMinutes(s.start, s.end);
-        result[s.taskId] = (result[s.taskId] || 0) + minutes;
-      }
-      return result;
-    }
-
-    function sumTotalMinutes(sessionsList) {
-      return sessionsList.reduce((acc, s) => {
-        if (!s.end) return acc;
-        return acc + computeDurationMinutes(s.start, s.end);
-      }, 0);
-    }
-
-    function getLastNDaysDates(n) {
-      const out = [];
-      const now = new Date();
-      for (let i = n - 1; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        out.push(d);
-      }
-      return out;
-    }
-
-    function slugify(text) {
-      return (
-        text
-          .toString()
-          .toLowerCase()
-          .trim()
-          .replace(/\s+/g, '-')
-          .replace(/[^\w\-]+/g, '')
-          .substring(0, 24) || `task_${Date.now()}`
-      );
-    }
-
-    function getTaskById(id) {
-      return tasks.find(t => t.id === id) || null;
-    }
-
-    function getTaskDisplayName(task) {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!task) return dict.deletedTask;
-      const n = task.names || {};
-      return n[currentLang] || n.zh || n.en || n.ko || task.id;
-    }
-
-    // ====== 多语言应用 ======
-    function applyLang() {
-      const dict = I18N[currentLang] || I18N.zh;
-      localStorage.setItem(LANG_STORAGE_KEY, currentLang);
-
-      if (tabFinanceEl) tabFinanceEl.textContent = dict.financeTab;
-      if (tabStudyEl) tabStudyEl.textContent = dict.studyTab;
-
-      if (studyTitleTextEl) studyTitleTextEl.textContent = dict.studyTitle;
-      if (studySubtitleTextEl) studySubtitleTextEl.textContent = dict.studySubtitle;
-      if (localHintTextEl) localHintTextEl.textContent = dict.localHint;
-      if (labelTaskEl) labelTaskEl.textContent = dict.labelTask;
-      if (labelTimerEl) labelTimerEl.textContent = dict.labelTimer;
-
-      if (todayHeaderTextEl) todayHeaderTextEl.textContent = dict.todayHeader;
-
-      if (taskManageTitleEl) taskManageTitleEl.textContent = dict.taskManageTitle;
-      if (taskManageSubtitleEl) taskManageSubtitleEl.textContent = dict.taskManageSubtitle;
-      if (taskNewTitleEl) taskNewTitleEl.textContent = dict.taskNewTitle;
-
-      if (weeklyTitleEl) weeklyTitleEl.textContent = dict.weeklyTitle;
-      if (weeklySubtitleEl) weeklySubtitleEl.textContent = dict.weeklySubtitle;
-
-      if (historyTitleEl) historyTitleEl.textContent = dict.historyTitle;
-      if (historySubtitleEl) historySubtitleEl.textContent = dict.historySubtitle;
-
-      if (thDateEl) thDateEl.textContent = dict.thDate;
-      if (thTaskEl) thTaskEl.textContent = dict.thTask;
-      if (thStartEl) thStartEl.textContent = dict.thStart;
-      if (thEndEl) thEndEl.textContent = dict.thEnd;
-      if (thDurationEl) thDurationEl.textContent = dict.thDuration;
-
-      if (clearAllButtonEl) clearAllButtonEl.textContent = dict.btnClearAll;
-
-      updateStatusUI();
-      renderTodaySummary();
-      renderTaskList();
-      renderHistory();
-      highlightLangButtons();
-    }
-
-    function highlightLangButtons() {
-      langButtons.forEach(btn => {
-        const lang = btn.getAttribute('data-lang');
-        if (lang === currentLang) {
-          btn.classList.add('bg-sky-500', 'text-white');
-          btn.classList.remove('text-gray-600');
-        } else {
-          btn.classList.remove('bg-sky-500', 'text-white');
-          btn.classList.add('text-gray-600');
+      function loadCurrentSession() {
+        try {
+          const raw = localStorage.getItem(CURRENT_SESSION_KEY);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!parsed || !parsed.taskId || !parsed.start) return null;
+          return parsed;
+        } catch {
+          return null;
         }
-      });
-    }
+      }
 
-    // ====== 计时器 UI ======
-    function startTimerLoop() {
-      if (!currentSession || timerId !== null) return;
-      timerId = setInterval(() => {
+      function saveCurrentSession(session) {
+        localStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify(session));
+      }
+
+      function clearCurrentSession() {
+        localStorage.removeItem(CURRENT_SESSION_KEY);
+      }
+
+      function setCurrentAccountId(id) {
+        currentAccountId = (id || '').trim();
+        localStorage.setItem(ACCOUNT_ID_STORAGE_KEY, currentAccountId);
+      }
+
+      function computeDurationMinutes(startISO, endISO) {
+        const start = new Date(startISO);
+        const end = new Date(endISO);
+        const diffMs = end - start;
+        if (isNaN(diffMs) || diffMs <= 0) return 0;
+        return diffMs / 60000;
+      }
+
+      function formatTimeHM(date) {
+        return date.toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      }
+
+      function formatDateYMD(date) {
+        return date.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      }
+
+      function formatTimerDisplay(totalSeconds) {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+      }
+
+      function isSameDate(a, b) {
+        return (
+          a.getFullYear() === b.getFullYear() &&
+          a.getMonth() === b.getMonth() &&
+          a.getDate() === b.getDate()
+        );
+      }
+
+      function getTodaySessions(all) {
+        const today = new Date();
+        return all.filter(s => isSameDate(new Date(s.start), today));
+      }
+
+      function sumByTask(sessionsList) {
+        const result = {};
+        for (const s of sessionsList) {
+          if (!s.end) continue;
+          const minutes = computeDurationMinutes(s.start, s.end);
+          result[s.taskId] = (result[s.taskId] || 0) + minutes;
+        }
+        return result;
+      }
+
+      function sumTotalMinutes(sessionsList) {
+        return sessionsList.reduce((acc, s) => {
+          if (!s.end) return acc;
+          return acc + computeDurationMinutes(s.start, s.end);
+        }, 0);
+      }
+
+      function getLastNDaysDates(n) {
+        const out = [];
         const now = new Date();
-        const start = new Date(currentSession.start);
-        const elapsed = Math.max(0, Math.floor((now - start) / 1000));
-        if (timerDisplayEl) {
-          timerDisplayEl.textContent = formatTimerDisplay(elapsed);
+        for (let i = n - 1; i >= 0; i--) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - i);
+          out.push(d);
         }
-      }, 1000);
-    }
-
-    function stopTimerLoop() {
-      if (timerId !== null) {
-        clearInterval(timerId);
-        timerId = null;
-      }
-    }
-
-    function updateStatusUI() {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!statusTextEl || !toggleButtonEl || !stopButtonEl) return;
-
-      if (currentSession) {
-        const task = getTaskById(currentSession.taskId);
-        const start = new Date(currentSession.start);
-        statusTextEl.textContent =
-          dict.statusRunningPrefix +
-          getTaskDisplayName(task) +
-          dict.statusRunningAt +
-          formatTimeHM(start);
-        toggleButtonEl.textContent = dict.btnPause;
-        stopButtonEl.disabled = false;
-      } else {
-        statusTextEl.textContent = dict.statusIdle;
-        toggleButtonEl.textContent = dict.btnStart;
-        stopButtonEl.disabled = true;
-        if (timerDisplayEl) timerDisplayEl.textContent = '00:00:00';
-      }
-    }
-
-    // ====== 渲染：项目下拉 & 列表 ======
-    function renderTaskSelect() {
-      if (!taskSelectEl) return;
-      taskSelectEl.innerHTML = '';
-      tasks.forEach(task => {
-        const opt = document.createElement('option');
-        opt.value = task.id;
-        opt.textContent = getTaskDisplayName(task);
-        taskSelectEl.appendChild(opt);
-      });
-    }
-
-    function renderTaskList() {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!taskListEl) return;
-      taskListEl.innerHTML = '';
-
-      if (!tasks.length) {
-        const p = document.createElement('p');
-        p.className = 'text-xs text-gray-400';
-        p.textContent = dict.taskListEmpty;
-        taskListEl.appendChild(p);
-        return;
+        return out;
       }
 
-      tasks.forEach(task => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center justify-between text-xs border border-gray-100 rounded-lg px-3 py-2 bg-slate-50';
+      function slugify(text) {
+        return (
+          text
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-')
+            .replace(/[^\w\-]+/g, '')
+            .substring(0, 24) || `task_${Date.now()}`
+        );
+      }
 
-        const left = document.createElement('div');
-        left.className = 'flex flex-col';
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'font-semibold text-gray-800';
-        nameSpan.textContent = getTaskDisplayName(task);
-        const goalSpan = document.createElement('span');
-        goalSpan.className = 'text-[11px] text-gray-500';
-        const goal = task.goal || 0;
-        goalSpan.textContent = dict.taskGoalLabel + goal + dict.taskGoalUnit;
-        left.appendChild(nameSpan);
-        left.appendChild(goalSpan);
+      function getTaskById(id) {
+        return tasks.find(t => t.id === id) || null;
+      }
 
-        const right = document.createElement('button');
-        right.className = 'text-red-500 text-[11px] px-2 py-1 rounded-full border border-red-200 bg-red-50 hover:bg-red-100 transition';
-        right.textContent = '✕';
-        right.addEventListener('click', () => handleDeleteTask(task.id));
+      function getTaskDisplayName(task) {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!task) return dict.deletedTask;
+        const n = task.names || {};
+        return n[currentLang] || n.zh || n.en || n.ko || task.id;
+      }
 
-        wrapper.appendChild(left);
-        wrapper.appendChild(right);
-        taskListEl.appendChild(wrapper);
-      });
-    }
+      function applyLang() {
+        const dict = I18N[currentLang] || I18N.zh;
+        localStorage.setItem(LANG_STORAGE_KEY, currentLang);
+        window.__dashboardLang = currentLang;
+        if (window.__updateFinanceLang) window.__updateFinanceLang(currentLang);
 
-    // ====== 渲染：今日进度 ======
-    function renderTodaySummary() {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!todaySummaryGridEl || !todayTotalBadgeEl) return;
+        if (tabFinanceEl) tabFinanceEl.textContent = dict.financeTab;
+        if (tabStudyEl) tabStudyEl.textContent = dict.studyTab;
 
-      const todaySessions = getTodaySessions(sessions);
-      const byTask = sumByTask(todaySessions);
-      todaySummaryGridEl.innerHTML = '';
+        if (studyTitleTextEl) studyTitleTextEl.textContent = dict.studyTitle;
+        if (studySubtitleTextEl) studySubtitleTextEl.textContent = dict.studySubtitle;
+        if (localHintTextEl) localHintTextEl.textContent = dict.localHint;
+        if (labelTaskEl) labelTaskEl.textContent = dict.labelTask;
+        if (labelTimerEl) labelTimerEl.textContent = dict.labelTimer;
 
-      let total = 0;
+        if (todayHeaderTextEl) todayHeaderTextEl.textContent = dict.todayHeader;
 
-      tasks.forEach(task => {
-        const minutes = byTask[task.id] || 0;
-        total += minutes;
-        const goal = task.goal || 0;
-        const percent = goal > 0 ? Math.min(100, (minutes / goal) * 100) : 0;
+        if (taskManageTitleEl) taskManageTitleEl.textContent = dict.taskManageTitle;
+        if (taskManageSubtitleEl) taskManageSubtitleEl.textContent = dict.taskManageSubtitle;
+        if (taskNewTitleEl) taskNewTitleEl.textContent = dict.taskNewTitle;
 
-        const card = document.createElement('div');
-        card.className = 'border rounded-lg px-2.5 py-2 bg-slate-50';
+        if (weeklyTitleEl) weeklyTitleEl.textContent = dict.weeklyTitle;
+        if (weeklySubtitleEl) weeklySubtitleEl.textContent = dict.weeklySubtitle;
 
-        const titleRow = document.createElement('div');
-        titleRow.className = 'flex items-center justify-between mb-1';
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'text-[11px] text-gray-600';
-        nameSpan.textContent = getTaskDisplayName(task);
-        const statusSpan = document.createElement('span');
-        statusSpan.className = 'text-[10px] px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-white';
-        if (goal > 0) {
-          statusSpan.textContent = minutes >= goal ? '✔︎' : '…';
+        if (historyTitleEl) historyTitleEl.textContent = dict.historyTitle;
+        if (historySubtitleEl) historySubtitleEl.textContent = dict.historySubtitle;
+
+        if (thDateEl) thDateEl.textContent = dict.thDate;
+        if (thTaskEl) thTaskEl.textContent = dict.thTask;
+        if (thStartEl) thStartEl.textContent = dict.thStart;
+        if (thEndEl) thEndEl.textContent = dict.thEnd;
+        if (thDurationEl) thDurationEl.textContent = dict.thDuration;
+
+        if (clearAllButtonEl) clearAllButtonEl.textContent = dict.btnClearAll;
+
+        updateStatusUI();
+        renderTodaySummary();
+        renderTaskList();
+        renderHistory();
+        highlightLangButtons();
+      }
+
+      function highlightLangButtons() {
+        langButtons.forEach(btn => {
+          const lang = btn.getAttribute('data-lang');
+          if (lang === currentLang) {
+            btn.classList.add('bg-sky-500', 'text-white');
+            btn.classList.remove('text-gray-600');
+          } else {
+            btn.classList.remove('bg-sky-500', 'text-white');
+            btn.classList.add('text-gray-600');
+          }
+        });
+      }
+
+      function startTimerLoop() {
+        if (!currentSession || timerId !== null) return;
+        timerId = setInterval(() => {
+          const now = new Date();
+          const start = new Date(currentSession.start);
+          const elapsed = Math.max(0, Math.floor((now - start) / 1000));
+          if (timerDisplayEl) {
+            timerDisplayEl.textContent = formatTimerDisplay(elapsed);
+          }
+        }, 1000);
+      }
+
+      function stopTimerLoop() {
+        if (timerId !== null) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+      }
+
+      function updateStatusUI() {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!statusTextEl || !toggleButtonEl || !stopButtonEl) return;
+
+        if (currentSession) {
+          const task = getTaskById(currentSession.taskId);
+          const start = new Date(currentSession.start);
+          statusTextEl.textContent =
+            dict.statusRunningPrefix +
+            getTaskDisplayName(task) +
+            dict.statusRunningAt +
+            formatTimeHM(start);
+          toggleButtonEl.textContent = dict.btnPause;
+          stopButtonEl.disabled = false;
         } else {
-          statusSpan.textContent = '–';
+          statusTextEl.textContent = dict.statusIdle;
+          toggleButtonEl.textContent = dict.btnStart;
+          stopButtonEl.disabled = true;
+          if (timerDisplayEl) timerDisplayEl.textContent = '00:00:00';
         }
-        titleRow.appendChild(nameSpan);
-        titleRow.appendChild(statusSpan);
-
-        const valueRow = document.createElement('div');
-        valueRow.className = 'flex items-baseline justify-between';
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'font-mono text-sm text-gray-800';
-        valueSpan.textContent = `${minutes.toFixed(0)}${dict.todayTotalSuffix}`;
-        const goalSpan = document.createElement('span');
-        goalSpan.className = 'text-[10px] text-gray-400';
-        if (goal > 0) {
-          goalSpan.textContent = `${dict.taskGoalLabel}${goal}${dict.taskGoalUnit}`;
-        } else {
-          goalSpan.textContent = '';
-        }
-        valueRow.appendChild(valueSpan);
-        valueRow.appendChild(goalSpan);
-
-        card.appendChild(titleRow);
-        card.appendChild(valueRow);
-
-        if (goal > 0) {
-          const bar = document.createElement('div');
-          bar.className = 'mt-1 w-full h-1.5 rounded-full bg-slate-200 overflow-hidden';
-          const fill = document.createElement('div');
-          fill.className = 'h-1.5 bg-gradient-to-r from-sky-400 to-emerald-400';
-          fill.style.width = `${percent}%`;
-          bar.appendChild(fill);
-          card.appendChild(bar);
-        }
-
-        todaySummaryGridEl.appendChild(card);
-      });
-
-      todayTotalBadgeEl.textContent =
-        dict.todayTotalPrefix + total.toFixed(0) + dict.todayTotalSuffix;
-    }
-
-    // ====== 渲染：历史记录 ======
-    function renderHistory() {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!historyBodyEl || !historyEmptyEl) return;
-      historyBodyEl.innerHTML = '';
-
-      if (sessions.length === 0) {
-        historyEmptyEl.textContent = dict.historyEmpty;
-        historyEmptyEl.classList.remove('hidden');
-        return;
       }
-      historyEmptyEl.classList.add('hidden');
 
-      const sorted = [...sessions].sort(
-        (a, b) => new Date(b.start) - new Date(a.start)
-      );
-      const recent = sorted.slice(0, 40);
+      function renderTaskSelect() {
+        if (!taskSelectEl) return;
+        taskSelectEl.innerHTML = '';
+        tasks.forEach(task => {
+          const opt = document.createElement('option');
+          opt.value = task.id;
+          opt.textContent = getTaskDisplayName(task);
+          taskSelectEl.appendChild(opt);
+        });
+      }
 
-      recent.forEach(s => {
-        const tr = document.createElement('tr');
-        const start = new Date(s.start);
-        const end = s.end ? new Date(s.end) : null;
-        const minutes = s.end ? computeDurationMinutes(s.start, s.end) : 0;
-        const task = getTaskById(s.taskId);
+      function renderTaskList() {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!taskListEl) return;
+        taskListEl.innerHTML = '';
 
-        tr.innerHTML = `
+        if (!tasks.length) {
+          const p = document.createElement('p');
+          p.className = 'text-xs text-gray-400';
+          p.textContent = dict.taskListEmpty;
+          taskListEl.appendChild(p);
+          return;
+        }
+
+        tasks.forEach(task => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'flex items-center justify-between text-xs border border-gray-100 rounded-lg px-3 py-2 bg-slate-50';
+
+          const left = document.createElement('div');
+          left.className = 'flex flex-col';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'font-semibold text-gray-800';
+          nameSpan.textContent = getTaskDisplayName(task);
+          const goalSpan = document.createElement('span');
+          goalSpan.className = 'text-[11px] text-gray-500';
+          const goal = task.goal || 0;
+          goalSpan.textContent = dict.taskGoalLabel + goal + dict.taskGoalUnit;
+          left.appendChild(nameSpan);
+          left.appendChild(goalSpan);
+
+          const right = document.createElement('button');
+          right.className = 'text-red-500 text-[11px] px-2 py-1 rounded-full border border-red-200 bg-red-50 hover:bg-red-100 transition';
+          right.textContent = '✕';
+          right.addEventListener('click', () => handleDeleteTask(task.id));
+
+          wrapper.appendChild(left);
+          wrapper.appendChild(right);
+          taskListEl.appendChild(wrapper);
+        });
+      }
+
+      function renderTodaySummary() {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!todaySummaryGridEl || !todayTotalBadgeEl) return;
+
+        const todaySessions = getTodaySessions(sessions);
+        const byTask = sumByTask(todaySessions);
+        todaySummaryGridEl.innerHTML = '';
+
+        let total = 0;
+
+        tasks.forEach(task => {
+          const minutes = byTask[task.id] || 0;
+          total += minutes;
+          const goal = task.goal || 0;
+          const percent = goal > 0 ? Math.min(100, (minutes / goal) * 100) : 0;
+
+          const card = document.createElement('div');
+          card.className = 'border rounded-lg px-2.5 py-2 bg-slate-50';
+
+          const titleRow = document.createElement('div');
+          titleRow.className = 'flex items-center justify-between mb-1';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'text-[11px] text-gray-600';
+          nameSpan.textContent = getTaskDisplayName(task);
+          const statusSpan = document.createElement('span');
+          statusSpan.className = 'text-[10px] px-2 py-0.5 rounded-full border border-gray-200 text-gray-500 bg-white';
+          if (goal > 0) {
+            statusSpan.textContent = minutes >= goal ? '✔︎' : '…';
+          } else {
+            statusSpan.textContent = '–';
+          }
+          titleRow.appendChild(nameSpan);
+          titleRow.appendChild(statusSpan);
+
+          const valueRow = document.createElement('div');
+          valueRow.className = 'flex items-baseline justify-between';
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'font-mono text-sm text-gray-800';
+          valueSpan.textContent = `${minutes.toFixed(0)}${dict.todayTotalSuffix}`;
+          const goalSpan = document.createElement('span');
+          goalSpan.className = 'text-[10px] text-gray-400';
+          if (goal > 0) {
+            goalSpan.textContent = `${dict.taskGoalLabel}${goal}${dict.taskGoalUnit}`;
+          } else {
+            goalSpan.textContent = '';
+          }
+          valueRow.appendChild(valueSpan);
+          valueRow.appendChild(goalSpan);
+
+          card.appendChild(titleRow);
+          card.appendChild(valueRow);
+
+          if (goal > 0) {
+            const bar = document.createElement('div');
+            bar.className = 'mt-1 w-full h-1.5 rounded-full bg-slate-200 overflow-hidden';
+            const fill = document.createElement('div');
+            fill.className = 'h-1.5 bg-gradient-to-r from-sky-400 to-emerald-400';
+            fill.style.width = `${percent}%`;
+            bar.appendChild(fill);
+            card.appendChild(bar);
+          }
+
+          todaySummaryGridEl.appendChild(card);
+        });
+
+        todayTotalBadgeEl.textContent =
+          dict.todayTotalPrefix + total.toFixed(0) + dict.todayTotalSuffix;
+      }
+
+      function renderHistory() {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!historyBodyEl || !historyEmptyEl) return;
+        historyBodyEl.innerHTML = '';
+
+        if (sessions.length === 0) {
+          historyEmptyEl.textContent = dict.historyEmpty;
+          historyEmptyEl.classList.remove('hidden');
+          return;
+        }
+        historyEmptyEl.classList.add('hidden');
+
+        const sorted = [...sessions].sort(
+          (a, b) => new Date(b.start) - new Date(a.start)
+        );
+        const recent = sorted.slice(0, 40);
+
+        recent.forEach(s => {
+          const tr = document.createElement('tr');
+          const start = new Date(s.start);
+          const end = s.end ? new Date(s.end) : null;
+          const minutes = s.end ? computeDurationMinutes(s.start, s.end) : 0;
+          const task = getTaskById(s.taskId);
+
+          tr.innerHTML = `
           <td class="px-2 py-1 whitespace-nowrap">${formatDateYMD(start)}</td>
           <td class="px-2 py-1 whitespace-nowrap">${getTaskDisplayName(task)}</td>
           <td class="px-2 py-1 whitespace-nowrap">${formatTimeHM(start)}</td>
           <td class="px-2 py-1 whitespace-nowrap">${end ? formatTimeHM(end) : '-'}</td>
           <td class="px-2 py-1 text-right whitespace-nowrap">${minutes.toFixed(1)}</td>
         `;
-        historyBodyEl.appendChild(tr);
-      });
-    }
-
-    // ====== 渲染：7 日柱状图 ======
-    function renderWeeklyChart() {
-      const canvas = document.getElementById('weeklyChart');
-      if (!canvas || typeof Chart === 'undefined') return;
-      const ctx = canvas.getContext('2d');
-
-      const days = getLastNDaysDates(7);
-      const totals = days.map(d => {
-        const daySessions = sessions.filter(s =>
-          isSameDate(new Date(s.start), d)
-        );
-        return sumTotalMinutes(daySessions);
-      });
-      const labels = days.map(d =>
-        d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
-      );
-
-      if (weeklyChart) {
-        weeklyChart.data.labels = labels;
-        weeklyChart.data.datasets[0].data = totals;
-        weeklyChart.update();
-        return;
+          historyBodyEl.appendChild(tr);
+        });
       }
 
-      weeklyChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: 'Total study time (minutes)',
-              data: totals,
-              borderWidth: 1,
-              borderRadius: 6,
-              backgroundColor: 'rgba(56, 189, 248, 0.55)',
-              borderColor: 'rgba(56, 189, 248, 1)'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { grid: { display: false } },
-            y: {
-              beginAtZero: true,
-              grid: { color: 'rgba(148, 163, 184, 0.3)' },
-              ticks: { color: '#6b7280' }
-            }
+      function renderWeeklyChart() {
+        const canvas = document.getElementById('weeklyChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+        const ctx = canvas.getContext('2d');
+
+        const days = getLastNDaysDates(7);
+        const totals = days.map(d => {
+          const daySessions = sessions.filter(s =>
+            isSameDate(new Date(s.start), d)
+          );
+          return sumTotalMinutes(daySessions);
+        });
+        const labels = days.map(d =>
+          d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+        );
+
+        if (weeklyChart) {
+          weeklyChart.data.labels = labels;
+          weeklyChart.data.datasets[0].data = totals;
+          weeklyChart.update();
+          return;
+        }
+
+        weeklyChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Total study time (minutes)',
+                data: totals,
+                borderWidth: 1,
+                borderRadius: 6,
+                backgroundColor: 'rgba(56, 189, 248, 0.55)',
+                borderColor: 'rgba(56, 189, 248, 1)'
+              }
+            ]
           },
-          plugins: {
-            legend: {
-              labels: {
-                color: '#374151',
-                font: { size: 11 }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false } },
+              y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(148, 163, 184, 0.3)' },
+                ticks: { color: '#6b7280' }
               }
             },
-            tooltip: {
-              callbacks: {
-                label: ctx => ` ${(ctx.parsed.y || 0).toFixed(1)} min`
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#374151',
+                  font: { size: 11 }
+                }
+              },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ` ${(ctx.parsed.y || 0).toFixed(1)} min`
+                }
               }
             }
           }
-        }
-      });
-    }
-
-    function renderAll() {
-      renderTaskSelect();
-      renderTaskList();
-      renderTodaySummary();
-      renderHistory();
-      renderWeeklyChart();
-      updateStatusUI();
-    }
-
-    // ====== 事件：新增 / 删除项目 ======
-    function handleAddTask() {
-      const nameZh = (newTaskNameZhEl.value || '').trim();
-      const nameEn = (newTaskNameEnEl.value || '').trim();
-      const nameKo = (newTaskNameKoEl.value || '').trim();
-      const goalVal = parseInt(newTaskGoalEl.value, 10);
-
-      if (!nameZh && !nameEn && !nameKo) {
-        alert('请至少填写一个语言的项目名称');
-        return;
-      }
-      if (!Number.isFinite(goalVal) || goalVal < 0) {
-        alert('请填写合理的每日目标分钟数（>= 0）');
-        return;
-      }
-      const baseName = nameEn || nameZh || nameKo;
-      let id = slugify(baseName);
-      if (tasks.some(t => t.id === id)) {
-        id = `${id}_${Date.now()}`;
-      }
-
-      const newTask = {
-        id,
-        names: { zh: nameZh, en: nameEn, ko: nameKo },
-        goal: goalVal
-      };
-      tasks.push(newTask);
-      saveTasks();
-      newTaskNameZhEl.value = '';
-      newTaskNameEnEl.value = '';
-      newTaskNameKoEl.value = '';
-      newTaskGoalEl.value = '';
-
-      renderAll();
-    }
-
-    function handleDeleteTask(taskId) {
-      const ok = confirm('确定要删除这个项目吗？历史记录会保留，但项目名称将显示为「已删除项目」。');
-      if (!ok) return;
-      tasks = tasks.filter(t => t.id !== taskId);
-      saveTasks();
-      renderAll();
-    }
-
-    // ====== 事件：开始 / 暂停 / 清空记录 ======
-    function handleStartOrPause() {
-      if (currentSession) {
-        handleStopCurrent();
-        return;
-      }
-      if (!taskSelectEl) return;
-      const taskId = taskSelectEl.value;
-      if (!taskId) return;
-
-      const nowISO = new Date().toISOString();
-      currentSession = { taskId, start: nowISO };
-      saveCurrentSession(currentSession);
-      startTimerLoop();
-      updateStatusUI();
-    }
-
-    function handleStopCurrent() {
-      if (!currentSession) return;
-      const nowISO = new Date().toISOString();
-      const duration = computeDurationMinutes(currentSession.start, nowISO);
-      if (duration > 0.01) {
-        sessions.push({
-          id: String(Date.now()),
-          taskId: currentSession.taskId,
-          start: currentSession.start,
-          end: nowISO
         });
-        saveSessions();
-      }
-      clearCurrentSession();
-      currentSession = null;
-      stopTimerLoop();
-      renderAll();
-    }
-
-    function handleClearAll() {
-      const ok = window.confirm('确定要清空所有学习记录吗？此操作不可恢复。');
-      if (!ok) return;
-      sessions = [];
-      saveSessions();
-      clearCurrentSession();
-      currentSession = null;
-      stopTimerLoop();
-      renderAll();
-    }
-
-    // ====== 云同步逻辑：本地 <-> Supabase ======
-    function makeSessionKey(s) {
-      return `${s.taskId}|${s.start}|${s.end || ''}`;
-    }
-
-    async function syncWithCloud() {
-      const dict = I18N[currentLang] || I18N.zh;
-      if (!supabaseClient) {
-        alert('Supabase 未初始化，检查是否正确引入 supabase-js。');
-        return;
-      }
-      if (!currentAccountId) {
-        alert(dict.syncNeedId);
-        return;
       }
 
-      // 简单 UI 提示
-      const oldText = syncButtonEl ? syncButtonEl.textContent : '';
-      const oldDisabled = syncButtonEl ? syncButtonEl.disabled : false;
-      if (syncButtonEl) {
-        syncButtonEl.disabled = true;
-        syncButtonEl.textContent = '…';
-      }
-      if (statusTextEl) {
-        statusTextEl.textContent = dict.syncWorking;
-      }
-
-      try {
-        // 1. 取出云端该账号的所有记录
-        const { data, error } = await supabaseClient
-          .from('study_sessions')
-          .select('task_id, start_time, end_time')
-          .eq('account_id', currentAccountId)
-          .order('start_time', { ascending: true });
-
-        if (error) throw error;
-
-        const remoteSessions = (data || []).map(row => ({
-          taskId: row.task_id,
-          start: row.start_time,
-          end: row.end_time
-        }));
-
-        // 2. 以“sessionKey = taskId + start + end”去重合并
-        const merged = [];
-        const seen = new Set();
-
-        remoteSessions.forEach(s => {
-          const key = makeSessionKey(s);
-          if (!seen.has(key)) {
-            seen.add(key);
-            merged.push({ ...s });
-          }
-        });
-
-        sessions.forEach(s => {
-          const key = makeSessionKey(s);
-          if (!seen.has(key)) {
-            seen.add(key);
-            merged.push({ taskId: s.taskId, start: s.start, end: s.end });
-          }
-        });
-
-        // 3. 找出 merged 中哪些是云端没有的 -> 插入
-        const remoteKeySet = new Set(remoteSessions.map(makeSessionKey));
-        const rowsToInsert = merged
-          .filter(s => !remoteKeySet.has(makeSessionKey(s)))
-          .map(s => ({
-            account_id: currentAccountId,
-            task_id: s.taskId,
-            start_time: s.start,
-            end_time: s.end
-          }));
-
-        if (rowsToInsert.length > 0) {
-          const { error: insertError } = await supabaseClient
-            .from('study_sessions')
-            .insert(rowsToInsert);
-          if (insertError) throw insertError;
-        }
-
-        // 4. 用 merged 覆盖本地 sessions，并重新生成 id
-        sessions = merged.map((s, index) => ({
-          id: `${index}_${s.taskId}_${s.start}`,
-          taskId: s.taskId,
-          start: s.start,
-          end: s.end
-        }));
-        saveSessions();
-        renderAll();
-
-        alert(dict.syncDone);
-      } catch (e) {
-        console.error(e);
-        const dict = I18N[currentLang] || I18N.zh;
-        alert(dict.syncError + (e.message || e.toString()));
-      } finally {
-        if (syncButtonEl) {
-          syncButtonEl.disabled = oldDisabled;
-          syncButtonEl.textContent = oldText || '☁︎ 同步';
-        }
+      function renderAll() {
+        renderTaskSelect();
+        renderTaskList();
+        renderTodaySummary();
+        renderHistory();
+        renderWeeklyChart();
         updateStatusUI();
       }
-    }
 
-    function handleSyncClick() {
-      if (accountIdInputEl) {
-        setCurrentAccountId(accountIdInputEl.value);
+      function handleAddTask() {
+        const nameZh = (newTaskNameZhEl.value || '').trim();
+        const nameEn = (newTaskNameEnEl.value || '').trim();
+        const nameKo = (newTaskNameKoEl.value || '').trim();
+        const goalVal = parseInt(newTaskGoalEl.value, 10);
+
+        if (!nameZh && !nameEn && !nameKo) {
+          alert('请至少填写一个语言的项目名称');
+          return;
+        }
+        if (!Number.isFinite(goalVal) || goalVal < 0) {
+          alert('请填写合理的每日目标分钟数（>= 0）');
+          return;
+        }
+        const baseName = nameEn || nameZh || nameKo;
+        let id = slugify(baseName);
+        if (tasks.some(t => t.id === id)) {
+          id = `${id}_${Date.now()}`;
+        }
+
+        const newTask = {
+          id,
+          names: { zh: nameZh, en: nameEn, ko: nameKo },
+          goal: goalVal
+        };
+        tasks.push(newTask);
+        saveTasks();
+        newTaskNameZhEl.value = '';
+        newTaskNameEnEl.value = '';
+        newTaskNameKoEl.value = '';
+        newTaskGoalEl.value = '';
+
+        renderAll();
       }
-      syncWithCloud();
-    }
 
-    // ====== 初始化 ======
-    loadTasks();
-    sessions = loadSessions();
-    currentSession = loadCurrentSession();
+      function handleDeleteTask(taskId) {
+        const ok = confirm('确定要删除这个项目吗？历史记录会保留，但项目名称将显示为「已删除项目」。');
+        if (!ok) return;
+        tasks = tasks.filter(t => t.id !== taskId);
+        saveTasks();
+        renderAll();
+      }
 
-    if (currentSession) {
-      startTimerLoop();
-    } else if (timerDisplayEl) {
-      timerDisplayEl.textContent = '00:00:00';
-    }
+      function handleStartOrPause() {
+        if (currentSession) {
+          handleStopCurrent();
+          return;
+        }
+        if (!taskSelectEl) return;
+        const taskId = taskSelectEl.value;
+        if (!taskId) return;
 
-    if (toggleButtonEl) toggleButtonEl.addEventListener('click', handleStartOrPause);
-    if (stopButtonEl) stopButtonEl.addEventListener('click', handleStopCurrent);
-    if (clearAllButtonEl) clearAllButtonEl.addEventListener('click', handleClearAll);
-    if (addTaskButtonEl) addTaskButtonEl.addEventListener('click', handleAddTask);
-    if (syncButtonEl) syncButtonEl.addEventListener('click', handleSyncClick);
+        const nowISO = new Date().toISOString();
+        currentSession = { taskId, start: nowISO };
+        saveCurrentSession(currentSession);
+        startTimerLoop();
+        updateStatusUI();
+      }
 
-    langButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const lang = btn.getAttribute('data-lang');
-        if (!lang) return;
-        currentLang = lang;
-        applyLang();
+      function handleStopCurrent() {
+        if (!currentSession) return;
+        const nowISO = new Date().toISOString();
+        const duration = computeDurationMinutes(currentSession.start, nowISO);
+        if (duration > 0.01) {
+          sessions.push({
+            id: String(Date.now()),
+            taskId: currentSession.taskId,
+            start: currentSession.start,
+            end: nowISO
+          });
+          saveSessions();
+        }
+        clearCurrentSession();
+        currentSession = null;
+        stopTimerLoop();
+        renderAll();
+      }
+
+      function handleClearAll() {
+        const ok = window.confirm('确定要清空所有学习记录吗？此操作不可恢复。');
+        if (!ok) return;
+        sessions = [];
+        saveSessions();
+        clearCurrentSession();
+        currentSession = null;
+        stopTimerLoop();
+        renderAll();
+      }
+
+      function makeSessionKey(s) {
+        return `${s.taskId}|${s.start}|${s.end || ''}`;
+      }
+
+      async function syncWithCloud() {
+        const dict = I18N[currentLang] || I18N.zh;
+        if (!supabaseClient) {
+          alert('Supabase 未初始化，检查是否正确引入 supabase-js。');
+          return;
+        }
+        if (!currentAccountId) {
+          alert(dict.syncNeedId);
+          return;
+        }
+
+        const oldText = syncButtonEl ? syncButtonEl.textContent : '';
+        const oldDisabled = syncButtonEl ? syncButtonEl.disabled : false;
+        if (syncButtonEl) {
+          syncButtonEl.disabled = true;
+          syncButtonEl.textContent = '…';
+        }
+        if (statusTextEl) {
+          statusTextEl.textContent = dict.syncWorking;
+        }
+
+        try {
+          const { data, error } = await supabaseClient
+            .from('study_sessions')
+            .select('task_id, start_time, end_time')
+            .eq('account_id', currentAccountId)
+            .order('start_time', { ascending: true });
+
+          if (error) throw error;
+
+          const remoteSessions = (data || []).map(row => ({
+            taskId: row.task_id,
+            start: row.start_time,
+            end: row.end_time
+          }));
+
+          const merged = [];
+          const seen = new Set();
+
+          remoteSessions.forEach(s => {
+            const key = makeSessionKey(s);
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push({ ...s });
+            }
+          });
+
+          sessions.forEach(s => {
+            const key = makeSessionKey(s);
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push({ taskId: s.taskId, start: s.start, end: s.end });
+            }
+          });
+
+          const remoteKeySet = new Set(remoteSessions.map(makeSessionKey));
+          const rowsToInsert = merged
+            .filter(s => !remoteKeySet.has(makeSessionKey(s)))
+            .map(s => ({
+              account_id: currentAccountId,
+              task_id: s.taskId,
+              start_time: s.start,
+              end_time: s.end
+            }));
+
+          if (rowsToInsert.length > 0) {
+            const { error: insertError } = await supabaseClient
+              .from('study_sessions')
+              .insert(rowsToInsert);
+            if (insertError) throw insertError;
+          }
+
+          sessions = merged.map((s, index) => ({
+            id: `${index}_${s.taskId}_${s.start}`,
+            taskId: s.taskId,
+            start: s.start,
+            end: s.end
+          }));
+          saveSessions();
+          renderAll();
+
+          alert(dict.syncDone);
+        } catch (e) {
+          console.error(e);
+          alert(dict.syncError + (e.message || e.toString()));
+        } finally {
+          if (syncButtonEl) {
+            syncButtonEl.disabled = oldDisabled;
+            syncButtonEl.textContent = oldText || '☁︎ 同步';
+          }
+          updateStatusUI();
+        }
+      }
+
+      function handleSyncClick() {
+        if (accountIdInputEl) {
+          setCurrentAccountId(accountIdInputEl.value);
+        }
+        syncWithCloud();
+      }
+
+      loadTasks();
+      sessions = loadSessions();
+      currentSession = loadCurrentSession();
+
+      if (currentSession) {
+        startTimerLoop();
+      } else if (timerDisplayEl) {
+        timerDisplayEl.textContent = '00:00:00';
+      }
+
+      if (toggleButtonEl) toggleButtonEl.addEventListener('click', handleStartOrPause);
+      if (stopButtonEl) stopButtonEl.addEventListener('click', handleStopCurrent);
+      if (clearAllButtonEl) clearAllButtonEl.addEventListener('click', handleClearAll);
+      if (addTaskButtonEl) addTaskButtonEl.addEventListener('click', handleAddTask);
+      if (syncButtonEl) syncButtonEl.addEventListener('click', handleSyncClick);
+
+      langButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const lang = btn.getAttribute('data-lang');
+          if (!lang) return;
+          currentLang = lang;
+          applyLang();
+        });
       });
+
+      renderAll();
+      applyLang();
     });
-
-    renderAll();
-    applyLang();
-  });
-</script>
-
+  </script>
 
 </body>
 </html>
